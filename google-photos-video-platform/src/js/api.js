@@ -14,7 +14,10 @@ const API = {
         while (attempts < API.retryCount) {
             try {
                 const token = Auth.getAccessToken();
-                if (!token) throw new Error('No access token');
+                if (!token) {
+                    alert('DEBUG: No access token found! isAuthenticated=' + Auth.isAuthenticated());
+                    throw new Error('No access token');
+                }
 
                 const headers = {
                     'Authorization': `Bearer ${token}`,
@@ -28,7 +31,8 @@ const API = {
                 });
 
                 if (response.status === 401) {
-                    // Token expired or invalid
+                    const errBody = await response.text();
+                    alert('DEBUG 401: Token=' + token.substring(0, 20) + '... Endpoint=' + endpoint + ' Response=' + errBody.substring(0, 200));
                     Auth.logout();
                     throw new Error('Unauthorized');
                 }
