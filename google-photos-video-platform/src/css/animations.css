@@ -1,0 +1,43 @@
+/* Animations */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes slideUp {
+    from {
+        transform: translateY(20px);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.fade-in {
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+.slide-up {
+    animation: slideUp 0.4s ease-out;
+}
+
+.video-card {
+    animation: fadeIn 0.5s ease-in-out;
+}
+
+/* Hover effects */
+.btn-primary {
+    transition: transform 0.1s, opacity 0.2s;
+}
+
+.btn-primary:active {
+    transform: scale(0.98);
+}
