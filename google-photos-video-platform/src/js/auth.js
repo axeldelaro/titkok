@@ -55,6 +55,7 @@ const Auth = {
 
         if (error) {
             console.error('Auth error:', error);
+            alert('Auth error: ' + error + ' - ' + params.get('error_description'));
             return false;
         }
 
@@ -64,12 +65,14 @@ const Auth = {
         const storedState = Storage.get('auth_state', 'session');
         if (state !== storedState) {
             console.error('State mismatch');
+            alert('State mismatch: expected ' + storedState + ', got ' + state);
             return false;
         }
 
         const codeVerifier = Storage.get('code_verifier', 'session');
         if (!codeVerifier) {
             console.error('Code verifier missing');
+            alert('Code verifier missing from session storage');
             return false;
         }
 
@@ -92,6 +95,7 @@ const Auth = {
             const data = await response.json();
 
             if (data.error) {
+                alert('Token exchange error: ' + data.error + ' - ' + (data.error_description || ''));
                 throw new Error(data.error_description || data.error);
             }
 
@@ -111,6 +115,7 @@ const Auth = {
             return true;
         } catch (err) {
             console.error('Token exchange failed:', err);
+            alert('Token exchange failed: ' + err.message);
             return false;
         }
     },
