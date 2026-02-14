@@ -11,20 +11,6 @@ export default function Modal(title, content) {
                 ${content}
             </div>
         </div>
-        <style>
-            .modal-overlay {
-                position: fixed; inset: 0; background: rgba(0,0,0,0.7);
-                display: flex; align-items: center; justify-content: center;
-                z-index: 2000; opacity: 0; transition: opacity 0.3s;
-            }
-            .modal-content {
-                background: var(--surface-color); padding: 1.5rem; border-radius: 8px;
-                width: 90%; max-width: 500px; transform: translateY(20px); transition: transform 0.3s;
-            }
-            .modal-header { display: flex; justify-content: space-between; margin-bottom: 1rem; }
-            .modal-overlay.open { opacity: 1; pointer-events: auto; }
-            .modal-overlay.open .modal-content { transform: translateY(0); }
-        </style>
     `;
 
     // Animation trigger
@@ -39,6 +25,15 @@ export default function Modal(title, content) {
     modal.onclick = (e) => {
         if (e.target === modal) close();
     };
+
+    // ESC key to close
+    const escHandler = (e) => {
+        if (e.key === 'Escape') {
+            close();
+            document.removeEventListener('keydown', escHandler);
+        }
+    };
+    document.addEventListener('keydown', escHandler);
 
     return modal;
 }

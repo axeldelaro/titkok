@@ -76,11 +76,9 @@ export default function Navbar() {
         if (searchInput) {
             searchInput.onkeydown = (e) => {
                 if (e.key === 'Enter') {
-                    // Trigger search in store/API
-                    const query = e.target.value;
-                    if (query.trim()) {
-                        // Dispatch search event or navigate
-                        console.log('Searching for:', query);
+                    const query = e.target.value.trim();
+                    if (query) {
+                        window.location.hash = `/search?q=${encodeURIComponent(query)}`;
                     }
                 }
             };

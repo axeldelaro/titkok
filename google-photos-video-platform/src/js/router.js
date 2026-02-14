@@ -4,9 +4,11 @@ const routes = {
     '/': 'home',
     '/video': 'video',
     '/playlist': 'playlist',
+    '/playlists': 'playlist',
     '/likes': 'likes',
     '/history': 'history',
     '/profile': 'profile',
+    '/search': 'search',
     '/login': 'login'
 };
 

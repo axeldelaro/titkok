@@ -1,7 +1,7 @@
-import '../css/main.css';
-import '../css/layout.css';
-import '../css/responsive.css';
-import '../css/animations.css'; // Just in case, though empty for now
+import './css/main.css';
+import './css/layout.css';
+import './css/responsive.css';
+import './css/animations.css';
 import Router from './js/router.js';
 import UI from './js/ui.js';
 import Auth from './js/auth.js';

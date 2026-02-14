@@ -1,4 +1,5 @@
 import Router from '../js/router.js';
+import Store from '../js/store.js';
 
 export default function Sidebar() {
     const aside = document.createElement('aside');
@@ -7,36 +8,61 @@ export default function Sidebar() {
     const menuItems = [
         { icon: '🏠', label: 'Home', path: '#/' },
         { icon: '❤️', label: 'Liked Videos', path: '#/likes' },
-        { icon: '📂', label: 'Playlists', path: '#/playlists' }, // Fixed route to plural based on typical conventions, mapped to 'playlist' in router
+        { icon: '📂', label: 'Playlists', path: '#/playlist' },
         { icon: '🕒', label: 'History', path: '#/history' },
+        { icon: '👤', label: 'Profile', path: '#/profile' },
     ];
 
     aside.innerHTML = `
-        <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+        <div class="sidebar-nav">
             ${menuItems.map(item => `
-                <a href="${item.path}" class="nav-item" style="display: flex; align-items: center; gap: 1rem; padding: 0.8rem; border-radius: 8px; transition: background 0.2s;">
-                    <span>${item.icon}</span>
-                    <span>${item.label}</span>
+                <a href="${item.path}" class="nav-item sidebar-link">
+                    <span class="nav-icon">${item.icon}</span>
+                    <span class="nav-label">${item.label}</span>
                 </a>
             `).join('')}
         </div>
         
-        <hr style="border: none; border-top: 1px solid var(--border-color); margin: 1rem 0;">
+        <hr class="sidebar-divider">
         
-        <div style="padding: 0 0.8rem;">
-            <h3 style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 0.5rem;">YOUR PLAYLISTS</h3>
+        <div class="sidebar-section">
+            <h3 class="sidebar-section-title">YOUR PLAYLISTS</h3>
             <div id="sidebar-playlists">
                 <!-- Playlists will be injected here -->
-                <p style="font-size: 0.8rem; color: #666;">No playlists yet</p>
+                <p class="sidebar-empty-text">No playlists yet</p>
             </div>
         </div>
-        
-        <style>
-            .nav-item:hover {
-                background-color: rgba(255,255,255,0.1);
-            }
-        </style>
     `;
 
+    // Listen for playlist changes to update sidebar
+    Store.addEventListener('stateChange', (e) => {
+        if (e.detail.key === 'playlists') {
+            updatePlaylists(aside, e.detail.value);
+        }
+    });
+
+    // Initial load of playlists
+    setTimeout(() => {
+        const playlists = Store.get('playlists') || [];
+        updatePlaylists(aside, playlists);
+    }, 100);
+
     return aside;
+}
+
+function updatePlaylists(aside, playlists) {
+    const container = aside.querySelector('#sidebar-playlists');
+    if (!container) return;
+
+    if (!playlists || playlists.length === 0) {
+        container.innerHTML = '<p class="sidebar-empty-text">No playlists yet</p>';
+        return;
+    }
+
+    container.innerHTML = playlists.map(p => `
+        <a href="#/playlist?id=${p.id}" class="nav-item sidebar-playlist-link">
+            <span class="nav-icon">📂</span>
+            <span class="nav-label">${p.name}</span>
+        </a>
+    `).join('');
 }

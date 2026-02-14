@@ -78,6 +78,49 @@ const API = {
 
     getVideo: async (id) => {
         return API.request(`/mediaItems/${id}`);
+    },
+
+    getUserInfo: async () => {
+        const token = Auth.getAccessToken();
+        if (!token) throw new Error('No access token');
+
+        const response = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!response.ok) throw new Error('Failed to fetch user info');
+        return response.json();
+    },
+
+    searchByFilename: async (query, pageToken = null, pageSize = 25) => {
+        // Google Photos API doesn't support filename search directly,
+        // so we fetch all videos and filter client-side
+        const body = {
+            pageSize,
+            filters: {
+                mediaTypeFilter: {
+                    mediaTypes: ['VIDEO']
+                }
+            }
+        };
+
+        if (pageToken) {
+            body.pageToken = pageToken;
+        }
+
+        const data = await API.request('/mediaItems:search', {
+            method: 'POST',
+            body: JSON.stringify(body)
+        });
+
+        if (data && data.mediaItems) {
+            const lowerQuery = query.toLowerCase();
+            data.mediaItems = data.mediaItems.filter(item =>
+                item.filename.toLowerCase().includes(lowerQuery)
+            );
+        }
+
+        return data;
     }
 };
 

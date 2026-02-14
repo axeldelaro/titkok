@@ -21,6 +21,28 @@
     }
 }
 
+@keyframes scaleIn {
+    from {
+        transform: scale(0.95);
+        opacity: 0;
+    }
+
+    to {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+@keyframes shimmer {
+    0% {
+        background-position: -200% 0;
+    }
+
+    100% {
+        background-position: 200% 0;
+    }
+}
+
 .fade-in {
     animation: fadeIn 0.3s ease-in-out;
 }
@@ -29,15 +51,138 @@
     animation: slideUp 0.4s ease-out;
 }
 
+.scale-in {
+    animation: scaleIn 0.3s ease-out;
+}
+
+/* Video card staggered animation */
 .video-card {
     animation: fadeIn 0.5s ease-in-out;
+    animation-fill-mode: both;
 }
 
-/* Hover effects */
-.btn-primary {
-    transition: transform 0.1s, opacity 0.2s;
+.video-card:nth-child(1) {
+    animation-delay: 0.05s;
 }
 
-.btn-primary:active {
-    transform: scale(0.98);
+.video-card:nth-child(2) {
+    animation-delay: 0.1s;
+}
+
+.video-card:nth-child(3) {
+    animation-delay: 0.15s;
+}
+
+.video-card:nth-child(4) {
+    animation-delay: 0.2s;
+}
+
+.video-card:nth-child(5) {
+    animation-delay: 0.25s;
+}
+
+.video-card:nth-child(6) {
+    animation-delay: 0.3s;
+}
+
+.video-card:nth-child(7) {
+    animation-delay: 0.35s;
+}
+
+.video-card:nth-child(8) {
+    animation-delay: 0.4s;
+}
+
+/* Playlist card staggered */
+.playlist-card {
+    animation: slideUp 0.4s ease-out;
+    animation-fill-mode: both;
+}
+
+.playlist-card:nth-child(1) {
+    animation-delay: 0.05s;
+}
+
+.playlist-card:nth-child(2) {
+    animation-delay: 0.1s;
+}
+
+.playlist-card:nth-child(3) {
+    animation-delay: 0.15s;
+}
+
+.playlist-card:nth-child(4) {
+    animation-delay: 0.2s;
+}
+
+/* History item */
+.history-item {
+    animation: fadeIn 0.3s ease-out;
+    animation-fill-mode: both;
+}
+
+.history-item:nth-child(1) {
+    animation-delay: 0.03s;
+}
+
+.history-item:nth-child(2) {
+    animation-delay: 0.06s;
+}
+
+.history-item:nth-child(3) {
+    animation-delay: 0.09s;
+}
+
+.history-item:nth-child(4) {
+    animation-delay: 0.12s;
+}
+
+.history-item:nth-child(5) {
+    animation-delay: 0.15s;
+}
+
+/* Stat cards */
+.stat-card {
+    animation: scaleIn 0.4s ease-out;
+    animation-fill-mode: both;
+}
+
+.stat-card:nth-child(1) {
+    animation-delay: 0.1s;
+}
+
+.stat-card:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.stat-card:nth-child(3) {
+    animation-delay: 0.3s;
+}
+
+.stat-card:nth-child(4) {
+    animation-delay: 0.4s;
+}
+
+/* Hover pulse */
+@keyframes pulse {
+
+    0%,
+    100% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.05);
+    }
+}
+
+.btn-icon:active {
+    animation: pulse 0.15s ease-out;
+}
+
+/* Loading shimmer for thumbnails */
+.thumbnail-loading {
+    background: linear-gradient(90deg, var(--surface-color) 25%, var(--surface-hover) 50%, var(--surface-color) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
 }
