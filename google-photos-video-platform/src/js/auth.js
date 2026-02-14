@@ -43,7 +43,7 @@ const Auth = {
         authUrl.searchParams.append('code_challenge_method', 'S256');
         authUrl.searchParams.append('state', state);
         authUrl.searchParams.append('access_type', 'online');
-        authUrl.searchParams.append('prompt', 'select_account');
+        authUrl.searchParams.append('prompt', 'consent');
 
         window.location.href = authUrl.toString();
     },
