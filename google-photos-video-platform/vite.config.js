@@ -14,6 +14,9 @@ export default defineConfig(({ mode }) => {
             'import.meta.env.VITE_GOOGLE_CLIENT_ID': JSON.stringify(
                 env.VITE_GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID || ''
             ),
+            'import.meta.env.VITE_GOOGLE_CLIENT_SECRET': JSON.stringify(
+                env.VITE_GOOGLE_CLIENT_SECRET || process.env.VITE_GOOGLE_CLIENT_SECRET || ''
+            ),
             'import.meta.env.VITE_GOOGLE_PROJECT_ID': JSON.stringify(
                 env.VITE_GOOGLE_PROJECT_ID || process.env.VITE_GOOGLE_PROJECT_ID || ''
             ),

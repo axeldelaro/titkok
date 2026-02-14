@@ -2,6 +2,7 @@ import Storage from './storage.js';
 import { generateRandomString, sha256, base64UrlEncode } from './utils.js';
 
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+const CLIENT_SECRET = import.meta.env.VITE_GOOGLE_CLIENT_SECRET;
 // Scopes: Read-only access to media items and User Profile
 const SCOPES = 'https://www.googleapis.com/auth/photoslibrary.readonly https://www.googleapis.com/auth/userinfo.profile';
 const REDIRECT_URI = window.location.origin + (import.meta.env.BASE_URL || '/'); // Include base path for GitHub Pages
@@ -85,6 +86,7 @@ const Auth = {
                 },
                 body: new URLSearchParams({
                     client_id: CLIENT_ID,
+                    client_secret: CLIENT_SECRET,
                     grant_type: 'authorization_code',
                     code: code,
                     redirect_uri: REDIRECT_URI,
