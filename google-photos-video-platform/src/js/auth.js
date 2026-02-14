@@ -107,6 +107,9 @@ const Auth = {
             const expiresAt = new Date().getTime() + (data.expires_in * 1000) - 60000; // Buffer 1 min
             Storage.set('expires_at', expiresAt, 'session');
 
+            // DEBUG: Show what we got
+            alert('LOGIN OK!\nToken: ' + (data.access_token || 'NONE').substring(0, 30) + '...\nScope: ' + (data.scope || 'NO SCOPE RETURNED') + '\nExpires in: ' + data.expires_in + 's');
+
             // Clean up
             Storage.remove('code_verifier', 'session');
             Storage.remove('auth_state', 'session');

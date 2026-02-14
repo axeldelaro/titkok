@@ -19,22 +19,25 @@ const API = {
                     throw new Error('No access token');
                 }
 
+                const url = new URL(`${BASE_URL}${endpoint}`);
+                // url.searchParams.append('access_token', token); // REMOVED: Deprecated/Unreliable
+
                 const headers = {
-                    'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`,
                     ...options.headers
                 };
 
-                const response = await fetch(`${BASE_URL}${endpoint}`, {
+                const response = await fetch(url.toString(), {
                     ...options,
                     headers
                 });
 
-                if (response.status === 401) {
+                if (response.status === 401 || response.status === 403) {
                     const errBody = await response.text();
-                    alert('DEBUG 401: Token=' + token.substring(0, 20) + '... Endpoint=' + endpoint + ' Response=' + errBody.substring(0, 200));
-                    Auth.logout();
-                    throw new Error('Unauthorized');
+                    alert('DEBUG ' + response.status + ': ' + errBody);
+                    if (response.status === 401) Auth.logout();
+                    throw new Error(response.statusText);
                 }
 
                 if (response.status === 429) {
