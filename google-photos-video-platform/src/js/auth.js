@@ -41,8 +41,8 @@ const Auth = {
         authUrl.searchParams.append('code_challenge', codeChallenge);
         authUrl.searchParams.append('code_challenge_method', 'S256');
         authUrl.searchParams.append('state', state);
-        authUrl.searchParams.append('include_granted_scopes', 'true');
-        authUrl.searchParams.append('prompt', 'consent'); // Force consent to get refresh token if needed, though implicit flow is often easier for Pure SPA without backend
+        authUrl.searchParams.append('access_type', 'online');
+        authUrl.searchParams.append('prompt', 'select_account');
 
         window.location.href = authUrl.toString();
     },
@@ -106,7 +106,7 @@ const Auth = {
             Storage.remove('auth_state', 'session');
 
             // Remove query params from URL
-            window.history.replaceState({}, document.title, '/');
+            window.history.replaceState({}, document.title, import.meta.env.BASE_URL || '/');
 
             return true;
         } catch (err) {
