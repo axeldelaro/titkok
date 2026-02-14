@@ -2,6 +2,7 @@ import { defineConfig } from 'vite';
 import path from 'path';
 
 export default defineConfig({
+    base: '/titkok/',
     root: 'public',
     publicDir: '../static', // If we had specific static assets not in public (which is now root)
     build: {
