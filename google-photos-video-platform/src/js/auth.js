@@ -4,7 +4,7 @@ import { generateRandomString, sha256, base64UrlEncode } from './utils.js';
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 const CLIENT_SECRET = import.meta.env.VITE_GOOGLE_CLIENT_SECRET;
 // Scopes: Read-only access to media items and User Profile
-const SCOPES = 'https://www.googleapis.com/auth/photoslibrary.readonly https://www.googleapis.com/auth/userinfo.profile';
+const SCOPES = 'https://www.googleapis.com/auth/photoslibrary https://www.googleapis.com/auth/userinfo.profile';
 const REDIRECT_URI = window.location.origin + (import.meta.env.BASE_URL || '/'); // Include base path for GitHub Pages
 
 const Auth = {
@@ -108,17 +108,7 @@ const Auth = {
             Storage.set('expires_at', expiresAt, 'session');
 
             // DEBUG: Show what we got
-            const grantedScopes = data.scope || 'NO SCOPE RETURNED';
-            const missingScope = !grantedScopes.includes('photoslibrary.readonly');
-
-            let msg = 'LOGIN OK!\n';
-            msg += 'Scopes Granted: ' + grantedScopes + '\n';
-            if (missingScope) {
-                msg += '⚠️ WARNING: photoslibrary.readonly scope is MISSING! You probably didnt tick the box in the consent screen.\n';
-            } else {
-                msg += '✅ Photos scope is present.\n';
-            }
-            alert(msg);
+            alert('LOGIN SUCCESS!\n\nRequested: ' + SCOPES + '\n\nGRANTED: ' + data.scope + '\n\nPlease verify that the GRANTED scopes match the REQUESTED scopes.');
 
             // Clean up
             Storage.remove('code_verifier', 'session');

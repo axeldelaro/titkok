@@ -35,7 +35,8 @@ const API = {
 
                 if (response.status === 401 || response.status === 403) {
                     const errBody = await response.text();
-                    alert('DEBUG ' + response.status + ': ' + errBody);
+                    console.error('API Error details:', errBody);
+                    alert(`API Error ${response.status}: ${errBody}\n\nCheck console for details.`);
                     if (response.status === 401 || response.status === 403) Auth.logout();
                     throw new Error(response.statusText);
                 }
