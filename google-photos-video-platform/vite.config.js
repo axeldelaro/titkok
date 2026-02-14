@@ -4,6 +4,7 @@ import path from 'path';
 export default defineConfig({
     base: '/titkok/',
     root: 'public',
+    envDir: path.resolve(__dirname),
     publicDir: '../static', // If we had specific static assets not in public (which is now root)
     build: {
         outDir: '../dist',
