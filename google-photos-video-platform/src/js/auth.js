@@ -108,7 +108,17 @@ const Auth = {
             Storage.set('expires_at', expiresAt, 'session');
 
             // DEBUG: Show what we got
-            alert('LOGIN OK!\nToken: ' + (data.access_token || 'NONE').substring(0, 30) + '...\nScope: ' + (data.scope || 'NO SCOPE RETURNED') + '\nExpires in: ' + data.expires_in + 's');
+            const grantedScopes = data.scope || 'NO SCOPE RETURNED';
+            const missingScope = !grantedScopes.includes('photoslibrary.readonly');
+
+            let msg = 'LOGIN OK!\n';
+            msg += 'Scopes Granted: ' + grantedScopes + '\n';
+            if (missingScope) {
+                msg += '⚠️ WARNING: photoslibrary.readonly scope is MISSING! You probably didnt tick the box in the consent screen.\n';
+            } else {
+                msg += '✅ Photos scope is present.\n';
+            }
+            alert(msg);
 
             // Clean up
             Storage.remove('code_verifier', 'session');
