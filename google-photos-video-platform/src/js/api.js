@@ -36,7 +36,7 @@ const API = {
                 if (response.status === 401 || response.status === 403) {
                     const errBody = await response.text();
                     alert('DEBUG ' + response.status + ': ' + errBody);
-                    if (response.status === 401) Auth.logout();
+                    if (response.status === 401 || response.status === 403) Auth.logout();
                     throw new Error(response.statusText);
                 }
 
