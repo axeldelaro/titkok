@@ -4,7 +4,7 @@ import { generateRandomString, sha256, base64UrlEncode } from './utils.js';
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 // Scopes: Read-only access to media items and User Profile
 const SCOPES = 'https://www.googleapis.com/auth/photoslibrary.readonly https://www.googleapis.com/auth/userinfo.profile';
-const REDIRECT_URI = window.location.origin; // Redirect back to app root
+const REDIRECT_URI = window.location.origin + (import.meta.env.BASE_URL || '/'); // Include base path for GitHub Pages
 
 const Auth = {
     isAuthenticated: () => {
