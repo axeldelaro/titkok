@@ -42,21 +42,37 @@ const PendingUploads = {
             return;
         }
 
+        console.log(`[PendingUploads] Checking ${pending.length} pending video(s)...`);
         const nowReady = [];
+        const ONE_HOUR = 60 * 60 * 1000;
 
         for (const item of pending) {
+            // Remove items older than 1 hour (stuck/failed)
+            if (Date.now() - item.uploadedAt > ONE_HOUR) {
+                console.warn(`[PendingUploads] Removing stale item: ${item.filename}`);
+                PendingUploads.remove(item.id);
+                continue;
+            }
+
             try {
                 const fresh = await API.getVideo(item.id);
-                if (fresh && fresh.mediaMetadata && fresh.mediaMetadata.video) {
-                    const status = fresh.mediaMetadata.video.status;
-                    if (status === 'READY' || status === undefined) {
-                        // Video is ready to play
-                        nowReady.push(fresh);
-                        PendingUploads.remove(item.id);
+                console.log(`[PendingUploads] ${item.filename} response:`, fresh);
+
+                // If Google returns a valid mediaItem with a baseUrl, it's ready
+                if (fresh && fresh.baseUrl) {
+                    // Check if video status is explicitly PROCESSING
+                    const videoStatus = fresh.mediaMetadata?.video?.status;
+                    if (videoStatus === 'PROCESSING') {
+                        console.log(`[PendingUploads] ${item.filename} still processing...`);
+                        continue;
                     }
+                    // Ready!
+                    console.log(`[PendingUploads] ${item.filename} is READY!`);
+                    nowReady.push(fresh);
+                    PendingUploads.remove(item.id);
                 }
             } catch (e) {
-                console.warn(`Still waiting for video ${item.id}:`, e.message);
+                console.warn(`[PendingUploads] Error checking ${item.filename}:`, e.message);
             }
         }
 
