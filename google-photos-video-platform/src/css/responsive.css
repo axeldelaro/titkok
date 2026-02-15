@@ -86,14 +86,16 @@
     /* Player controls always visible on mobile (no hover) */
     .player-controls {
         opacity: 1 !important;
+        bottom: 65px;
+        padding-bottom: 0.5rem;
     }
 
     .player-controls .play-btn,
     .player-controls .mute-btn,
     .player-controls .fullscreen-btn {
-        min-width: 40px;
-        min-height: 40px;
-        font-size: 1.2rem;
+        min-width: 44px;
+        min-height: 44px;
+        font-size: 1.3rem;
     }
 
     .pip-btn {
@@ -102,7 +104,7 @@
 
     /* Feed overlay: position above the bottom nav bar */
     .feed-info-overlay {
-        bottom: 70px;
+        bottom: 130px;
         left: 0.5rem;
         right: 0.5rem;
         padding: 0.75rem;
@@ -110,7 +112,7 @@
 
     /* TikTok-style: actions adjusted for mobile bottom nav */
     .feed-actions {
-        bottom: 80px;
+        bottom: 140px;
         right: 0.75rem;
     }
 
@@ -122,10 +124,12 @@
 
     /* Feed container should account for bottom nav */
     .feed-container {
+        height: calc(100dvh - 60px) !important;
         height: calc(100vh - 60px) !important;
     }
 
     .video-card-feed {
+        height: calc(100dvh - 60px);
         height: calc(100vh - 60px);
     }
 }
