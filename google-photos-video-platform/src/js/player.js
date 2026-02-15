@@ -24,14 +24,14 @@ export default class Player {
         this.video.style.height = '100%';
         this.video.style.backgroundColor = '#000';
         this.video.preload = 'auto';
-        this.video.muted = true;
+        this.video.muted = false; // Try unmuted first
         this.video.playsInline = true;
         this.video.controls = false;
         this.video.loop = true;
+        this.video.volume = 1;
 
         // Explicit HTML attributes — required by browser autoplay policies
         this.video.setAttribute('autoplay', '');
-        this.video.setAttribute('muted', '');
         this.video.setAttribute('playsinline', '');
 
         // Loading Spinner Overlay
@@ -103,6 +103,29 @@ export default class Player {
         this.container.appendChild(this.loadingOverlay);
         this.container.appendChild(this.errorOverlay);
         this.container.appendChild(this.controls);
+
+        // Try to autoplay unmuted; if browser blocks, fallback to muted
+        const playAttempt = this.video.play();
+        if (playAttempt !== undefined) {
+            playAttempt.catch(() => {
+                // Unmuted autoplay blocked — fall back to muted
+                this.video.muted = true;
+                this.video.setAttribute('muted', '');
+                this.video.play().catch(() => { });
+            });
+        }
+
+        // On first user tap anywhere on the player, unmute
+        const unmuteOnce = () => {
+            if (this.video.muted) {
+                this.video.muted = false;
+                this.video.volume = 1;
+            }
+            this.container.removeEventListener('click', unmuteOnce);
+            this.container.removeEventListener('touchstart', unmuteOnce);
+        };
+        this.container.addEventListener('click', unmuteOnce);
+        this.container.addEventListener('touchstart', unmuteOnce);
 
         this.attachEvents();
     }

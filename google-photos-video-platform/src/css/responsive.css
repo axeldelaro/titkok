@@ -83,6 +83,23 @@
         display: none;
     }
 
+    /* Player controls always visible on mobile (no hover) */
+    .player-controls {
+        opacity: 1 !important;
+    }
+
+    .player-controls .play-btn,
+    .player-controls .mute-btn,
+    .player-controls .fullscreen-btn {
+        min-width: 40px;
+        min-height: 40px;
+        font-size: 1.2rem;
+    }
+
+    .pip-btn {
+        display: none;
+    }
+
     /* Feed overlay: position above the bottom nav bar */
     .feed-info-overlay {
         bottom: 70px;

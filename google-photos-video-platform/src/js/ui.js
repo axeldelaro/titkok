@@ -81,6 +81,7 @@ const UI = {
             const total = files.length;
             let successCount = 0;
             let failCount = 0;
+            const uploadedItems = [];
 
             for (let i = 0; i < total; i++) {
                 const file = files[i];
@@ -89,6 +90,7 @@ const UI = {
                 try {
                     const mediaItem = await API.uploadVideo(file);
                     console.log('Upload success:', mediaItem);
+                    if (mediaItem) uploadedItems.push(mediaItem);
                     successCount++;
                 } catch (err) {
                     console.error(`Upload failed for ${file.name}:`, err);
@@ -105,12 +107,30 @@ const UI = {
                 Toast.show(`${failCount} upload${failCount > 1 ? 's' : ''} failed.`, 'error');
             }
 
-            // Refresh home feed if we are there
-            if (successCount > 0 && (window.location.hash === '' || window.location.hash === '#/')) {
-                setTimeout(() => {
-                    Store.set('videos', []);
+            // Add uploaded items directly to the Store so they appear immediately
+            if (uploadedItems.length > 0) {
+                // Google Photos may still be processing — wait a moment then
+                // re-fetch each item to get a fresh baseUrl with video ready
+                Toast.show('Processing videos...', 'info', 3000);
+                await new Promise(r => setTimeout(r, 3000));
+
+                const refreshedItems = [];
+                for (const item of uploadedItems) {
+                    try {
+                        const fresh = await API.getVideo(item.id);
+                        refreshedItems.push(fresh);
+                    } catch {
+                        // Fall back to the original item
+                        refreshedItems.push(item);
+                    }
+                }
+
+                Store.setVideos(refreshedItems);
+
+                // Re-render if on home
+                if (window.location.hash === '' || window.location.hash === '#/' || window.location.hash === '#') {
                     UI.handleRoute({ route: 'home' });
-                }, 2000);
+                }
             }
         };
 
