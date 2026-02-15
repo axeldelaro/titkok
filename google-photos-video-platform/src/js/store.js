@@ -42,6 +42,11 @@ class Store extends EventTarget {
         this.state.loading = loading;
         this.dispatchEvent(new CustomEvent('loading', { detail: { loading } }));
     }
+
+    removeVideo(videoId) {
+        this.state.videos = this.state.videos.filter(v => v.id !== videoId);
+        this.dispatchEvent(new CustomEvent('videosUpdated', { detail: { videos: this.state.videos } }));
+    }
 }
 
 const store = new Store();

@@ -760,6 +760,22 @@
     max-height: 100vh;
 }
 
+/* --- Portrait / Vertical Video (TikTok-style) --- */
+.video-card-feed.portrait .feed-player-container {
+    max-width: 400px;
+}
+
+.video-card-feed.portrait .feed-player-container video {
+    object-fit: cover;
+}
+
+.video-card-feed.portrait .player-wrapper {
+    aspect-ratio: auto;
+    width: 100%;
+    height: 100%;
+    border-radius: 0;
+}
+
 .feed-info-overlay {
     position: absolute;
     bottom: 80px;

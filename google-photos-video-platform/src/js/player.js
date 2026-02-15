@@ -19,7 +19,7 @@ export default class Player {
         this.video = document.createElement('video');
         this.video.src = `${this.videoUrl}=dv`;
         this.video.poster = `${this.posterUrl}=w1920-h1080`;
-        this.video.crossOrigin = 'anonymous';
+        // Note: Do NOT set crossOrigin — Google Photos CDN doesn't send CORS headers
         this.video.style.width = '100%';
         this.video.style.height = '100%';
         this.video.style.backgroundColor = '#000';
@@ -65,13 +65,13 @@ export default class Player {
             console.error('Video load error:', this.video.error);
         });
 
-        // Retry button
+        // Retry button — re-fetch with cache bust
         this.errorOverlay.querySelector('.player-retry-btn').onclick = () => {
             this.errorOverlay.style.display = 'none';
             this.loadingOverlay.style.display = 'flex';
-            // Try removing crossOrigin as a workaround for CORS issues
-            this.video.removeAttribute('crossorigin');
-            this.video.src = `${this.videoUrl}=dv`;
+            // Add a cache-bust param to force a fresh request
+            const bust = `&_t=${Date.now()}`;
+            this.video.src = `${this.videoUrl}=dv${bust}`;
             this.video.load();
         };
 

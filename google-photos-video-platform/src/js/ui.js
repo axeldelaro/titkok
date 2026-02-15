@@ -226,8 +226,14 @@ const UI = {
 
             videos.forEach(video => {
                 const card = document.createElement('div');
-                card.className = 'video-card-feed';
                 card.dataset.id = video.id;
+
+                // Detect portrait orientation from metadata
+                const meta = video.mediaMetadata;
+                const w = parseInt(meta.width) || 0;
+                const h = parseInt(meta.height) || 0;
+                const isPortrait = h > w;
+                card.className = `video-card-feed${isPortrait ? ' portrait' : ''}`;
 
                 const playerContainer = document.createElement('div');
                 playerContainer.className = 'feed-player-container';
@@ -240,6 +246,7 @@ const UI = {
                     <div class="feed-actions">
                         <button class="btn-icon like-btn" title="Like">${Likes.isLiked(video.id) ? '❤️' : '🤍'}</button>
                         <button class="btn-icon share-btn" title="Copy Link">🔗</button>
+                        <button class="btn-icon delete-btn" title="Remove from feed">🗑️</button>
                     </div>
                 `;
 
@@ -255,6 +262,16 @@ const UI = {
                     e.stopPropagation();
                     navigator.clipboard.writeText(`${window.location.origin}/#/video?id=${video.id}`);
                     Toast.show('Link copied!');
+                };
+
+                const deleteBtn = infoOverlay.querySelector('.delete-btn');
+                deleteBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    if (confirm(`Remove "${video.filename}" from your feed?`)) {
+                        Store.removeVideo(video.id);
+                        card.remove();
+                        Toast.show('Video removed from feed');
+                    }
                 };
 
                 card.appendChild(playerContainer);
@@ -337,6 +354,7 @@ const UI = {
                     </button>
                     <button id="add-playlist-btn" class="btn-icon" title="Add to Playlist">📂</button>
                     <button id="share-btn" class="btn-icon" title="Copy Link">🔗</button>
+                    <button id="delete-video-btn" class="btn-icon" title="Remove from feed" style="color:#ef4444;">🗑️</button>
                 </div>
             </div>
         `;
@@ -364,6 +382,16 @@ const UI = {
             }).catch(() => {
                 Toast.show('Failed to copy link', 'error');
             });
+        };
+
+        // Delete / Remove from feed
+        const deleteBtn = info.querySelector('#delete-video-btn');
+        deleteBtn.onclick = () => {
+            if (confirm(`Remove "${video.filename}" from your feed?`)) {
+                Store.removeVideo(video.id);
+                Toast.show('Video removed from feed');
+                Router.navigate('/');
+            }
         };
 
         wrapper.appendChild(info);
