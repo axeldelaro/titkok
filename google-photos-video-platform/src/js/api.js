@@ -36,8 +36,34 @@ const API = {
                 if (response.status === 401 || response.status === 403) {
                     const errBody = await response.text();
                     console.error('API Error details:', errBody);
-                    alert(`API Error ${response.status}: ${errBody}\n\nCheck console for details.`);
-                    if (response.status === 401 || response.status === 403) Auth.logout();
+
+                    let errorMsg = `API Error ${response.status}`;
+                    let isScopeError = false;
+
+                    try {
+                        const jsonErr = JSON.parse(errBody);
+                        if (jsonErr.error && jsonErr.error.message) {
+                            errorMsg += `: ${jsonErr.error.message}`;
+                            // Check for common scope/permission errors
+                            if (jsonErr.error.message.includes('insufficient authentication scopes') ||
+                                jsonErr.error.message.includes('permission') ||
+                                jsonErr.error.status === 'PERMISSION_DENIED') {
+                                isScopeError = true;
+                            }
+                        }
+                    } catch (e) {
+                        errorMsg += `: ${errBody}`;
+                    }
+
+                    if (isScopeError) {
+                        alert(`PERMISSION ERROR: ${errorMsg}\n\nThe app needs updated permissions. You will be logged out. Please log in again and ensure you check ALL scope boxes.`);
+                        Auth.logout();
+                    } else if (response.status === 401) {
+                        Auth.logout(); // Token expired or invalid
+                    } else {
+                        alert(errorMsg + '\n\nCheck console for details.');
+                    }
+
                     throw new Error(response.statusText);
                 }
 

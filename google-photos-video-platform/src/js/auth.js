@@ -4,7 +4,7 @@ import { generateRandomString, sha256, base64UrlEncode } from './utils.js';
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 const CLIENT_SECRET = import.meta.env.VITE_GOOGLE_CLIENT_SECRET;
 // Scopes: Read-only access to media items and User Profile
-const SCOPES = 'https://www.googleapis.com/auth/photoslibrary https://www.googleapis.com/auth/userinfo.profile';
+const SCOPES = 'https://www.googleapis.com/auth/photoslibrary.readonly https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email openid';
 const REDIRECT_URI = window.location.origin + (import.meta.env.BASE_URL || '/'); // Include base path for GitHub Pages
 
 const Auth = {
