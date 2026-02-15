@@ -54,10 +54,8 @@ export default class Player {
             <button class="player-retry-btn">🔄 Retry</button>
         `;
 
-        // Hide loading when video is ready
-        this.video.addEventListener('canplay', () => {
-            this.loadingOverlay.style.display = 'none';
-        });
+        // Hide loading when video is ready — handled in activate()
+        // (we don't set the listener here because canplay may fire before overlay is in DOM)
 
         // Show error overlay on failure — but NOT for initial empty states
         this.video.addEventListener('error', () => {
@@ -72,10 +70,14 @@ export default class Player {
         // Retry button
         this.errorOverlay.querySelector('.player-retry-btn').onclick = () => {
             this.errorOverlay.style.display = 'none';
-            this.loadingOverlay.style.display = 'flex';
+            this.loadingOverlay.style.display = '';
             const bust = `&_t=${Date.now()}`;
             this.video.src = `${this.videoUrl}=dv${bust}`;
             this.video.load();
+            // Re-listen for canplay after retry
+            this.video.addEventListener('canplay', () => {
+                this.loadingOverlay.style.display = 'none';
+            }, { once: true });
         };
 
         // Custom Controls Overlay
@@ -114,12 +116,23 @@ export default class Player {
 
     // Called by IntersectionObserver when the player scrolls into view
     activate() {
-        // Only now add the loading overlay to the DOM
+        // Insert loading overlay
         if (!this.loadingOverlay.parentNode) {
             this.container.insertBefore(this.loadingOverlay, this.errorOverlay);
         }
-        this.loadingOverlay.style.display = '';
-        this.video.preload = 'auto';   // Now download the full video
+
+        // If video already has enough data, skip showing loading
+        if (this.video.readyState >= 3) {
+            this.loadingOverlay.style.display = 'none';
+        } else {
+            this.loadingOverlay.style.display = '';
+            // Listen for canplay NOW to hide the overlay
+            this.video.addEventListener('canplay', () => {
+                this.loadingOverlay.style.display = 'none';
+            }, { once: true });
+        }
+
+        this.video.preload = 'auto';
         this.video.play().catch(() => { });
     }
 
