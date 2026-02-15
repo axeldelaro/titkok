@@ -10,7 +10,7 @@ import Player from './player.js';
 import Likes from './likes.js';
 import Playlist from './playlist.js';
 import History from './history.js';
-import PendingUploads from './pendingUploads.js';
+// PendingUploads removed — simple upload flow
 import { Toast } from '../components/toast.js';
 import Modal from '../components/modal.js';
 
@@ -108,11 +108,12 @@ const UI = {
                 Toast.show(`${failCount} upload${failCount > 1 ? 's' : ''} failed.`, 'error');
             }
 
-            // Add uploaded items to pending queue
-            if (uploadedItems.length > 0) {
-                uploadedItems.forEach(item => PendingUploads.add(item));
-                Toast.show('Videos sent to Google! They will appear automatically once processed.', 'info', 5000);
-                // Re-render to show pending cards
+            // Refresh the feed
+            if (successCount > 0) {
+                // Clear cache so feed re-fetches everything from API
+                Store.set('videos', []);
+                Store.set('nextPageToken', null);
+                // Navigate to home
                 if (window.location.hash === '' || window.location.hash === '#/' || window.location.hash === '#') {
                     const content = document.getElementById('content');
                     if (content) UI.renderHome(content);
@@ -267,25 +268,7 @@ const UI = {
             };
             container.appendChild(shuffleBtn);
 
-            // Show pending upload cards at the top of the feed
-            const pendingItems = PendingUploads.getAll();
-            pendingItems.forEach(item => {
-                feed.appendChild(PendingUploads.createPendingCard(item));
-            });
 
-            // Register callback: when pending videos become ready, refresh the feed
-            PendingUploads.onReady((readyVideos) => {
-                // Add ready videos to Store and re-render
-                Store.setVideos(readyVideos);
-                Toast.show(`${readyVideos.length} video${readyVideos.length > 1 ? 's' : ''} ready! 🎉`, 'success');
-                const content = document.getElementById('content');
-                if (content) UI.renderHome(content);
-            });
-
-            // Start polling if there are pending uploads
-            if (pendingItems.length > 0) {
-                PendingUploads.startPolling();
-            }
 
             // Helper: detect portrait from metadata
             const isPortraitVideo = (video) => {
@@ -527,12 +510,14 @@ const UI = {
         };
 
         if (playlists.length === 0) {
-            container.innerHTML += `
-                <div class="empty-state">
-                    <span class="empty-state-icon">📁</span>
-                    <h2>No Playlists Yet</h2>
-                    <p class="text-secondary">Create a playlist to organize your favorite videos.</p>
-                </div>`;
+            const emptyState = document.createElement('div');
+            emptyState.className = 'empty-state';
+            emptyState.innerHTML = `
+                <span class="empty-state-icon">📁</span>
+                <h2>No Playlists Yet</h2>
+                <p class="text-secondary">Create a playlist to organize your favorite videos.</p>
+            `;
+            container.appendChild(emptyState);
             return;
         }
 
