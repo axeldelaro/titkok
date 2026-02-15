@@ -1,5 +1,5 @@
 export default class Player {
-    constructor(container, videoUrl, posterUrl, options = {}) {
+    constructor(container, videoUrl, posterUrl) {
         this.container = container;
         this.videoUrl = videoUrl;
         this.posterUrl = posterUrl;
@@ -7,7 +7,6 @@ export default class Player {
         this.controls = null;
         this.isPlaying = false;
         this.hideControlsTimer = null;
-        this.lazy = !!options.lazy; // If true, wait for activate()
 
         this.init();
     }
@@ -16,24 +15,24 @@ export default class Player {
         this.container.innerHTML = '';
         this.container.className = 'player-wrapper';
 
-        // Video Element
+        // Video Element — always set src, always start muted (mobile autoplay requirement)
         this.video = document.createElement('video');
-        // Don't set src yet — wait for activate() from IntersectionObserver
+        this.video.src = `${this.videoUrl}=dv`;
         this.video.poster = `${this.posterUrl}=w1920-h1080`;
-        // Note: Do NOT set crossOrigin — Google Photos CDN doesn't send CORS headers
         this.video.style.width = '100%';
         this.video.style.height = '100%';
         this.video.style.backgroundColor = '#000';
-        this.video.preload = 'none';
-        this.video.muted = false;
+        this.video.style.touchAction = 'pan-y';        // Allow swipe scrolling
+        this.video.preload = 'metadata';                // Light: gets dimensions + duration without full download
+        this.video.muted = true;                        // MUST be muted for mobile autoplay
         this.video.playsInline = true;
         this.video.controls = false;
         this.video.loop = true;
-        this.video.volume = 1;
-        this.activated = false;
 
-        // Explicit HTML attributes — required by browser autoplay policies
+        // Explicit HTML attributes for maximum browser compat
         this.video.setAttribute('playsinline', '');
+        this.video.setAttribute('webkit-playsinline', '');
+        this.video.setAttribute('muted', '');
 
         // Loading Spinner Overlay
         this.loadingOverlay = document.createElement('div');
@@ -59,18 +58,20 @@ export default class Player {
             this.loadingOverlay.style.display = 'none';
         });
 
-        // Show error overlay on failure
+        // Show error overlay on failure — but NOT for initial empty states
         this.video.addEventListener('error', () => {
-            this.loadingOverlay.style.display = 'none';
-            this.errorOverlay.style.display = 'flex';
-            console.error('Video load error:', this.video.error);
+            // Only show error if we actually have a src set
+            if (this.video.src && this.video.src !== window.location.href) {
+                this.loadingOverlay.style.display = 'none';
+                this.errorOverlay.style.display = 'flex';
+                console.error('Video load error:', this.video.error);
+            }
         });
 
-        // Retry button — re-fetch with cache bust
+        // Retry button
         this.errorOverlay.querySelector('.player-retry-btn').onclick = () => {
             this.errorOverlay.style.display = 'none';
             this.loadingOverlay.style.display = 'flex';
-            // Add a cache-bust param to force a fresh request
             const bust = `&_t=${Date.now()}`;
             this.video.src = `${this.videoUrl}=dv${bust}`;
             this.video.load();
@@ -89,8 +90,8 @@ export default class Player {
             <div class="controls-row">
                 <button class="play-btn" title="Play (Space)">▶</button>
                 <div class="volume-container">
-                    <button class="mute-btn" title="Mute (M)">🔊</button>
-                    <input type="range" min="0" max="1" step="0.05" value="1" class="volume-slider">
+                    <button class="mute-btn" title="Mute (M)">🔇</button>
+                    <input type="range" min="0" max="1" step="0.05" value="0" class="volume-slider">
                 </div>
                 <span class="time-display">00:00 / 00:00</span>
                 <div style="flex: 1;"></div>
@@ -105,50 +106,16 @@ export default class Player {
         this.container.appendChild(this.errorOverlay);
         this.container.appendChild(this.controls);
 
-        // Allow vertical swipe scrolling on mobile (TikTok-style feed)
-        this.video.style.touchAction = 'pan-y';
         this.container.style.touchAction = 'pan-y';
 
-        // On first user tap anywhere on the player, unmute
-        const unmuteOnce = () => {
-            if (this.video.muted) {
-                this.video.muted = false;
-                this.video.volume = 1;
-            }
-            this.container.removeEventListener('click', unmuteOnce);
-        };
-        this.container.addEventListener('click', unmuteOnce);
-
         this.attachEvents();
-
-        // Auto-activate unless lazy (feed uses lazy + IntersectionObserver)
-        if (!this.lazy) {
-            this.activate();
-        }
     }
 
     // Called by IntersectionObserver when the player scrolls into view
     activate() {
-        if (this.activated) {
-            // Already loaded — just resume
-            this.video.play().catch(() => { });
-            return;
-        }
-        this.activated = true;
         this.loadingOverlay.style.display = 'flex';
-
-        // Mobile requires muted for autoplay — unmute happens on first tap
-        this.video.muted = true;
-        this.video.src = `${this.videoUrl}=dv`;
-        this.video.preload = 'auto';
-
-        // Wait until the browser has enough data, THEN play
-        const onReady = () => {
-            this.video.removeEventListener('canplay', onReady);
-            this.video.play().catch(() => { });
-        };
-        this.video.addEventListener('canplay', onReady);
-        this.video.load();
+        this.video.preload = 'auto';   // Now download the full video
+        this.video.play().catch(() => { });
     }
 
     // Called when the player scrolls out of view
@@ -184,13 +151,12 @@ export default class Player {
         playBtn.onclick = togglePlay;
         this.video.onclick = togglePlay;
 
-        // Toggle play on click (already handled above)
-        // this.video.onclick = togglePlay; 
-        // Note: We leave click handling to the container or overlay in the UI to prevent conflict
-
-        // Mute Toggle
+        // Mute Toggle — also unmutes with volume
         muteBtn.onclick = () => {
             this.video.muted = !this.video.muted;
+            if (!this.video.muted && this.video.volume === 0) {
+                this.video.volume = 1;
+            }
             muteBtn.textContent = this.video.muted ? '🔇' : (this.video.volume > 0.5 ? '🔊' : '🔉');
             volumeSlider.value = this.video.muted ? 0 : this.video.volume;
         };
@@ -258,16 +224,15 @@ export default class Player {
 
         // Speed control
         const speeds = [0.5, 0.75, 1, 1.25, 1.5, 2];
-        let currentSpeedIndex = 2; // Default 1x
+        let currentSpeedIndex = 2;
         speedBtn.onclick = () => {
             currentSpeedIndex = (currentSpeedIndex + 1) % speeds.length;
             this.video.playbackRate = speeds[currentSpeedIndex];
             speedBtn.textContent = `${speeds[currentSpeedIndex]}x`;
         };
 
-        // Keyboard shortcuts (when player is focused or page-level)
+        // Keyboard shortcuts
         this._keyHandler = (e) => {
-            // Only handle if no input/textarea is focused
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 
             switch (e.key.toLowerCase()) {
@@ -309,7 +274,7 @@ export default class Player {
         };
         document.addEventListener('keydown', this._keyHandler);
 
-        // Auto-hide controls
+        // Auto-hide controls (desktop only — mobile has always-visible via CSS)
         this.container.onmousemove = () => {
             this.controls.style.opacity = '1';
             clearTimeout(this.hideControlsTimer);
