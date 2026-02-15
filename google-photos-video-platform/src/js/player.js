@@ -124,28 +124,25 @@ export default class Player {
     // Called by IntersectionObserver when the player scrolls into view
     activate() {
         if (this.activated) {
-            // Already loaded — just play
-            this.video.play().catch(() => {
-                this.video.muted = true;
-                this.video.play().catch(() => { });
-            });
+            // Already loaded — just resume
+            this.video.play().catch(() => { });
             return;
         }
         this.activated = true;
         this.loadingOverlay.style.display = 'flex';
+
+        // Mobile requires muted for autoplay — unmute happens on first tap
+        this.video.muted = true;
         this.video.src = `${this.videoUrl}=dv`;
         this.video.preload = 'auto';
-        this.video.load();
 
-        // Try to autoplay unmuted; fallback to muted
-        const playAttempt = this.video.play();
-        if (playAttempt !== undefined) {
-            playAttempt.catch(() => {
-                this.video.muted = true;
-                this.video.setAttribute('muted', '');
-                this.video.play().catch(() => { });
-            });
-        }
+        // Wait until the browser has enough data, THEN play
+        const onReady = () => {
+            this.video.removeEventListener('canplay', onReady);
+            this.video.play().catch(() => { });
+        };
+        this.video.addEventListener('canplay', onReady);
+        this.video.load();
     }
 
     // Called when the player scrolls out of view
