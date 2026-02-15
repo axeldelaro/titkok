@@ -244,20 +244,58 @@ const UI = {
             const feed = document.createElement('div');
             feed.className = 'video-feed';
 
+            // Shuffle button — floating on top of the feed
+            const shuffleBtn = document.createElement('button');
+            shuffleBtn.className = 'feed-shuffle-btn';
+            shuffleBtn.innerHTML = '🔀';
+            shuffleBtn.title = 'Shuffle';
+            shuffleBtn.onclick = () => {
+                // Fisher-Yates shuffle
+                const arr = Store.get('videos');
+                for (let i = arr.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [arr[i], arr[j]] = [arr[j], arr[i]];
+                }
+                Store.set('videos', arr);
+                UI.renderHome(container);
+                Toast.show('Videos shuffled! 🔀');
+            };
+            container.appendChild(shuffleBtn);
+
+            // Helper: detect portrait from metadata
+            const isPortraitVideo = (video) => {
+                const meta = video.mediaMetadata || {};
+                // Try top-level width/height first
+                let w = parseInt(meta.width) || 0;
+                let h = parseInt(meta.height) || 0;
+                // Fallback: check inside mediaMetadata.video
+                if ((!w || !h) && meta.video) {
+                    w = parseInt(meta.video.width) || w;
+                    h = parseInt(meta.video.height) || h;
+                }
+                return h > w && w > 0;
+            };
+
             videos.forEach(video => {
                 const card = document.createElement('div');
                 card.dataset.id = video.id;
 
-                // Detect portrait orientation from metadata
-                const meta = video.mediaMetadata;
-                const w = parseInt(meta.width) || 0;
-                const h = parseInt(meta.height) || 0;
-                const isPortrait = h > w;
+                const isPortrait = isPortraitVideo(video);
                 card.className = `video-card-feed${isPortrait ? ' portrait' : ''}`;
 
                 const playerContainer = document.createElement('div');
                 playerContainer.className = 'feed-player-container';
-                new Player(playerContainer, video.baseUrl, video.baseUrl);
+                const player = new Player(playerContainer, video.baseUrl, video.baseUrl);
+
+                // Fallback portrait detection: if metadata didn't have dimensions,
+                // detect from the actual video element once loaded
+                if (!isPortrait && player.video) {
+                    player.video.addEventListener('loadedmetadata', () => {
+                        if (player.video.videoHeight > player.video.videoWidth) {
+                            card.classList.add('portrait');
+                        }
+                    });
+                }
 
                 // Info overlay (title only — pointer-events: none)
                 const infoOverlay = document.createElement('div');

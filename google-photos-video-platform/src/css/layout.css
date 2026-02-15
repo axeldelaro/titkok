@@ -717,6 +717,40 @@
     height: 100vh;
 }
 
+/* Floating Shuffle Button */
+.feed-shuffle-btn {
+    position: fixed;
+    top: 70px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 30;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    color: white;
+    font-size: 1.4rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
+    transition: transform 0.2s, background 0.2s;
+    touch-action: manipulation;
+}
+
+.feed-shuffle-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+    transform: translateX(-50%) scale(1.1);
+}
+
+.feed-shuffle-btn:active {
+    transform: translateX(-50%) scale(0.95);
+}
+
 .video-feed {
     height: 100%;
     overflow-y: scroll;
