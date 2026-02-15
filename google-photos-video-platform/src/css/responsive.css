@@ -82,6 +82,39 @@
     .speed-btn {
         display: none;
     }
+
+    /* Feed overlay: position above the bottom nav bar */
+    .feed-info-overlay {
+        bottom: 70px;
+        left: 0.5rem;
+        right: 0.5rem;
+        padding: 0.75rem;
+    }
+
+    /* TikTok-style: actions as a vertical column on the right */
+    .feed-actions {
+        position: fixed;
+        right: 0.75rem;
+        bottom: 140px;
+        flex-direction: column;
+        gap: 0.75rem;
+        z-index: 20;
+    }
+
+    .feed-actions .btn-icon {
+        width: 44px;
+        height: 44px;
+        font-size: 1.2rem;
+    }
+
+    /* Feed container should account for bottom nav */
+    .feed-container {
+        height: calc(100vh - 60px) !important;
+    }
+
+    .video-card-feed {
+        height: calc(100vh - 60px);
+    }
 }
 
 @media (max-width: 480px) {
