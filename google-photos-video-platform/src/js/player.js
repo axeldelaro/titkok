@@ -34,9 +34,10 @@ export default class Player {
         this.video.setAttribute('webkit-playsinline', '');
         this.video.setAttribute('muted', '');
 
-        // Loading Spinner Overlay
+        // Loading Spinner Overlay — hidden by default, shown in activate()
         this.loadingOverlay = document.createElement('div');
         this.loadingOverlay.className = 'player-loading-overlay';
+        this.loadingOverlay.style.display = 'none';
         this.loadingOverlay.innerHTML = `
             <div class="player-spinner"></div>
             <span>Loading video…</span>
