@@ -17,21 +17,21 @@ export default class Player {
 
         // Video Element
         this.video = document.createElement('video');
-        this.video.src = `${this.videoUrl}=dv`;
+        // Don't set src yet — wait for activate() from IntersectionObserver
         this.video.poster = `${this.posterUrl}=w1920-h1080`;
         // Note: Do NOT set crossOrigin — Google Photos CDN doesn't send CORS headers
         this.video.style.width = '100%';
         this.video.style.height = '100%';
         this.video.style.backgroundColor = '#000';
-        this.video.preload = 'auto';
-        this.video.muted = false; // Try unmuted first
+        this.video.preload = 'none';
+        this.video.muted = false;
         this.video.playsInline = true;
         this.video.controls = false;
         this.video.loop = true;
         this.video.volume = 1;
+        this.activated = false;
 
         // Explicit HTML attributes — required by browser autoplay policies
-        this.video.setAttribute('autoplay', '');
         this.video.setAttribute('playsinline', '');
 
         // Loading Spinner Overlay
@@ -108,17 +108,6 @@ export default class Player {
         this.video.style.touchAction = 'pan-y';
         this.container.style.touchAction = 'pan-y';
 
-        // Try to autoplay unmuted; if browser blocks, fallback to muted
-        const playAttempt = this.video.play();
-        if (playAttempt !== undefined) {
-            playAttempt.catch(() => {
-                // Unmuted autoplay blocked — fall back to muted
-                this.video.muted = true;
-                this.video.setAttribute('muted', '');
-                this.video.play().catch(() => { });
-            });
-        }
-
         // On first user tap anywhere on the player, unmute
         const unmuteOnce = () => {
             if (this.video.muted) {
@@ -130,6 +119,38 @@ export default class Player {
         this.container.addEventListener('click', unmuteOnce);
 
         this.attachEvents();
+    }
+
+    // Called by IntersectionObserver when the player scrolls into view
+    activate() {
+        if (this.activated) {
+            // Already loaded — just play
+            this.video.play().catch(() => {
+                this.video.muted = true;
+                this.video.play().catch(() => { });
+            });
+            return;
+        }
+        this.activated = true;
+        this.loadingOverlay.style.display = 'flex';
+        this.video.src = `${this.videoUrl}=dv`;
+        this.video.preload = 'auto';
+        this.video.load();
+
+        // Try to autoplay unmuted; fallback to muted
+        const playAttempt = this.video.play();
+        if (playAttempt !== undefined) {
+            playAttempt.catch(() => {
+                this.video.muted = true;
+                this.video.setAttribute('muted', '');
+                this.video.play().catch(() => { });
+            });
+        }
+    }
+
+    // Called when the player scrolls out of view
+    deactivate() {
+        this.video.pause();
     }
 
     attachEvents() {

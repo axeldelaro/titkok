@@ -287,6 +287,9 @@ const UI = {
                 playerContainer.className = 'feed-player-container';
                 const player = new Player(playerContainer, video.baseUrl, video.baseUrl);
 
+                // Store the player instance on the card for the IntersectionObserver
+                card._player = player;
+
                 // Fallback portrait detection: if metadata didn't have dimensions,
                 // detect from the actual video element once loaded
                 if (!isPortrait && player.video) {
@@ -338,6 +341,7 @@ const UI = {
 
             container.appendChild(feed);
 
+            // Lazy-load: only activate the video that is currently visible
             const observerOptions = {
                 root: null,
                 threshold: 0.6
@@ -345,14 +349,13 @@ const UI = {
 
             const observer = new IntersectionObserver((entries) => {
                 entries.forEach(entry => {
-                    const video = entry.target.querySelector('video');
-                    if (!video) return;
+                    const player = entry.target._player;
+                    if (!player) return;
 
                     if (entry.isIntersecting) {
-                        video.play().catch(() => { });
+                        player.activate();
                     } else {
-                        video.pause();
-                        video.currentTime = 0;
+                        player.deactivate();
                     }
                 });
             }, observerOptions);
