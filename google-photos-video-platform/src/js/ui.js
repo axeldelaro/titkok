@@ -208,12 +208,19 @@ const UI = {
 
         try {
             let videos = Store.get('videos');
+            const hiddenIds = Store.getHiddenIds();
+
             if (videos.length === 0) {
                 const data = await API.searchVideos();
                 if (data && data.mediaItems) {
                     videos = data.mediaItems.filter(item => item.mediaMetadata.video);
                     Store.setVideos(videos, data.nextPageToken);
                 }
+            }
+
+            // Filter out videos the user has deleted
+            if (hiddenIds.length > 0) {
+                videos = videos.filter(v => !hiddenIds.includes(v.id));
             }
 
             container.innerHTML = '';

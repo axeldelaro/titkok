@@ -45,7 +45,26 @@ class Store extends EventTarget {
 
     removeVideo(videoId) {
         this.state.videos = this.state.videos.filter(v => v.id !== videoId);
+        // Persist the deletion in localStorage
+        this.hideVideo(videoId);
         this.dispatchEvent(new CustomEvent('videosUpdated', { detail: { videos: this.state.videos } }));
+    }
+
+    // Persist hidden video IDs across refreshes
+    hideVideo(videoId) {
+        const hidden = this.getHiddenIds();
+        if (!hidden.includes(videoId)) {
+            hidden.push(videoId);
+            localStorage.setItem('hiddenVideoIds', JSON.stringify(hidden));
+        }
+    }
+
+    getHiddenIds() {
+        try {
+            return JSON.parse(localStorage.getItem('hiddenVideoIds') || '[]');
+        } catch {
+            return [];
+        }
     }
 }
 
