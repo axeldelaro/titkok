@@ -10,6 +10,7 @@ import Player from './player.js';
 import Likes from './likes.js';
 import Playlist from './playlist.js';
 import History from './history.js';
+import PendingUploads from './pendingUploads.js';
 import { Toast } from '../components/toast.js';
 import Modal from '../components/modal.js';
 
@@ -107,13 +108,11 @@ const UI = {
                 Toast.show(`${failCount} upload${failCount > 1 ? 's' : ''} failed.`, 'error');
             }
 
-            // Refresh the feed by clearing the cache and re-fetching from API
-            if (successCount > 0) {
-                Toast.show('Videos uploaded! They may take a moment to appear while Google processes them.', 'info', 5000);
-                // Clear the store so renderHome re-fetches from the API
-                Store.set('videos', []);
-                Store.set('nextPageToken', null);
-                // Navigate to home and re-render
+            // Add uploaded items to pending queue
+            if (uploadedItems.length > 0) {
+                uploadedItems.forEach(item => PendingUploads.add(item));
+                Toast.show('Videos sent to Google! They will appear automatically once processed.', 'info', 5000);
+                // Re-render to show pending cards
                 if (window.location.hash === '' || window.location.hash === '#/' || window.location.hash === '#') {
                     const content = document.getElementById('content');
                     if (content) UI.renderHome(content);
@@ -257,6 +256,26 @@ const UI = {
                 Toast.show('Videos shuffled! 🔀');
             };
             container.appendChild(shuffleBtn);
+
+            // Show pending upload cards at the top of the feed
+            const pendingItems = PendingUploads.getAll();
+            pendingItems.forEach(item => {
+                feed.appendChild(PendingUploads.createPendingCard(item));
+            });
+
+            // Register callback: when pending videos become ready, refresh the feed
+            PendingUploads.onReady((readyVideos) => {
+                // Add ready videos to Store and re-render
+                Store.setVideos(readyVideos);
+                Toast.show(`${readyVideos.length} video${readyVideos.length > 1 ? 's' : ''} ready! 🎉`, 'success');
+                const content = document.getElementById('content');
+                if (content) UI.renderHome(content);
+            });
+
+            // Start polling if there are pending uploads
+            if (pendingItems.length > 0) {
+                PendingUploads.startPolling();
+            }
 
             // Helper: detect portrait from metadata
             const isPortraitVideo = (video) => {
