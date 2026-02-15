@@ -156,6 +156,29 @@ const API = {
 
         return data;
     }
+    debugToken: async () => {
+        const token = Auth.getAccessToken();
+        if (!token) {
+            console.warn('Debug: No token to check');
+            return;
+        }
+        try {
+            const resp = await fetch(`https://oauth2.googleapis.com/tokeninfo?access_token=${token}`);
+            const info = await resp.json();
+            console.log('--- TOKEN DEBUG INFO ---');
+            console.log('Valid:', resp.ok);
+            console.log('Scopes:', info.scope);
+            console.log('Expires in:', info.expires_in);
+            console.log('Audience:', info.aud);
+            console.log('Error:', info.error);
+            console.log('------------------------');
+            return info;
+        } catch (e) {
+            console.error('Debug Token failed:', e);
+        }
+    },
+
+    // ... existing wrapper ...
 };
 
 export default API;
