@@ -239,43 +239,42 @@ const UI = {
                 playerContainer.className = 'feed-player-container';
                 new Player(playerContainer, video.baseUrl, video.baseUrl);
 
+                // Info overlay (title only — pointer-events: none)
                 const infoOverlay = document.createElement('div');
                 infoOverlay.className = 'feed-info-overlay';
-                infoOverlay.innerHTML = `
-                    <h3>${video.filename}</h3>
-                    <div class="feed-actions">
-                        <button class="btn-icon like-btn" title="Like">${Likes.isLiked(video.id) ? '❤️' : '🤍'}</button>
-                        <button class="btn-icon share-btn" title="Copy Link">🔗</button>
-                        <button class="btn-icon delete-btn" title="Remove from feed">🗑️</button>
-                    </div>
+                infoOverlay.innerHTML = `<h3>${video.filename}</h3>`;
+
+                // Action buttons — separate container, always clickable
+                const actions = document.createElement('div');
+                actions.className = 'feed-actions';
+                actions.innerHTML = `
+                    <button class="btn-icon like-btn" title="Like">${Likes.isLiked(video.id) ? '❤️' : '🤍'}</button>
+                    <button class="btn-icon share-btn" title="Copy Link">🔗</button>
+                    <button class="btn-icon delete-btn" title="Remove from feed">🗑️</button>
                 `;
 
-                const likeBtn = infoOverlay.querySelector('.like-btn');
-                likeBtn.onclick = (e) => {
+                actions.querySelector('.like-btn').onclick = (e) => {
                     e.stopPropagation();
                     const isLiked = Likes.toggleLike(video);
-                    likeBtn.textContent = isLiked ? '❤️' : '🤍';
+                    e.currentTarget.textContent = isLiked ? '❤️' : '🤍';
                 };
 
-                const shareBtn = infoOverlay.querySelector('.share-btn');
-                shareBtn.onclick = (e) => {
+                actions.querySelector('.share-btn').onclick = (e) => {
                     e.stopPropagation();
                     navigator.clipboard.writeText(`${window.location.origin}/#/video?id=${video.id}`);
                     Toast.show('Link copied!');
                 };
 
-                const deleteBtn = infoOverlay.querySelector('.delete-btn');
-                deleteBtn.onclick = (e) => {
+                actions.querySelector('.delete-btn').onclick = (e) => {
                     e.stopPropagation();
-                    if (confirm(`Remove "${video.filename}" from your feed?`)) {
-                        Store.removeVideo(video.id);
-                        card.remove();
-                        Toast.show('Video removed from feed');
-                    }
+                    Store.removeVideo(video.id);
+                    card.remove();
+                    Toast.show('Video removed from feed');
                 };
 
                 card.appendChild(playerContainer);
                 card.appendChild(infoOverlay);
+                card.appendChild(actions);
                 feed.appendChild(card);
             });
 

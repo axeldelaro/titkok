@@ -91,14 +91,10 @@
         padding: 0.75rem;
     }
 
-    /* TikTok-style: actions as a vertical column on the right */
+    /* TikTok-style: actions adjusted for mobile bottom nav */
     .feed-actions {
-        position: fixed;
+        bottom: 80px;
         right: 0.75rem;
-        bottom: 140px;
-        flex-direction: column;
-        gap: 0.75rem;
-        z-index: 20;
     }
 
     .feed-actions .btn-icon {
