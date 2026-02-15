@@ -26,9 +26,14 @@ export default function Navbar() {
         </div>
 
         <div style="display: flex; align-items: center; gap: 1rem;">
+            ${isAuth
+            ? `<button id="upload-btn" class="btn-primary" style="display:flex;align-items:center;gap:0.5rem;">
+                     <span>📹</span> Upload
+                   </button>`
+            : ''}
             <button id="theme-toggle" aria-label="Toggle Theme" style="font-size: 1.2rem;">🌙</button>
             ${isAuth
-            ? `<button id="logout-btn" class="btn-primary">Logout</button>`
+            ? `<button id="logout-btn" class="btn-secondary">Logout</button>`
             : `<button id="login-btn" class="btn-primary">Sign In</button>`
         }
         </div>
@@ -40,6 +45,7 @@ export default function Navbar() {
         const themeBtn = nav.querySelector('#theme-toggle');
         const loginBtn = nav.querySelector('#login-btn');
         const logoutBtn = nav.querySelector('#logout-btn');
+        const uploadBtn = nav.querySelector('#upload-btn');
         const searchInput = nav.querySelector('#search-input');
 
         if (toggleBtn) {
@@ -62,6 +68,12 @@ export default function Navbar() {
                     document.body.style.removeProperty('--surface-color');
                     themeBtn.textContent = '🌙';
                 }
+            };
+        }
+
+        if (uploadBtn) {
+            uploadBtn.onclick = () => {
+                document.dispatchEvent(new CustomEvent('triggerUpload'));
             };
         }
 

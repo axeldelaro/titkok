@@ -19,16 +19,20 @@ const API = {
                     throw new Error('No access token');
                 }
 
-                const url = new URL(`${BASE_URL}${endpoint}`);
-                // url.searchParams.append('access_token', token); // REMOVED: Deprecated/Unreliable
+                // Handle full URLs (like uploads) vs relative endpoints
+                const url = endpoint.startsWith('http') ? endpoint : `${BASE_URL}${endpoint}`;
 
                 const headers = {
-                    'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`,
                     ...options.headers
                 };
 
-                const response = await fetch(url.toString(), {
+                // JSON content type is default unless specified otherwise (e.g. for raw uploads)
+                if (!headers['Content-Type'] && !options.body instanceof ArrayBuffer && typeof options.body === 'string') {
+                    headers['Content-Type'] = 'application/json';
+                }
+
+                const response = await fetch(url, {
                     ...options,
                     headers
                 });
@@ -124,34 +128,62 @@ const API = {
     },
 
     searchByFilename: async (query, pageToken = null, pageSize = 25) => {
-        // Google Photos API doesn't support filename search directly,
-        // so we fetch all videos and filter client-side
-        const body = {
-            pageSize,
-            filters: {
-                mediaTypeFilter: {
-                    mediaTypes: ['VIDEO']
-                }
-            }
-        };
+        // ... existing code ...
+        return data; // Keep existing return
+    },
 
-        if (pageToken) {
-            body.pageToken = pageToken;
-        }
+    uploadVideo: async (file, onProgress) => {
+        const token = Auth.getAccessToken();
+        if (!token) throw new Error('No access token');
 
-        const data = await API.request('/mediaItems:search', {
+        // Step 1: Upload raw bytes
+        // Note: fetch doesn't support progress monitoring easily without XMLHttpRequest or Streams
+        // For simplicity, we'll just await the upload.
+
+        console.log('Uploading bytes...');
+        const uploadResponse = await fetch('https://photoslibrary.googleapis.com/v1/uploads', {
             method: 'POST',
-            body: JSON.stringify(body)
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-type': 'application/octet-stream',
+                'X-Goog-Upload-Content-Type': file.type,
+                'X-Goog-Upload-Protocol': 'raw'
+            },
+            body: file
         });
 
-        if (data && data.mediaItems) {
-            const lowerQuery = query.toLowerCase();
-            data.mediaItems = data.mediaItems.filter(item =>
-                item.filename.toLowerCase().includes(lowerQuery)
-            );
+        if (!uploadResponse.ok) {
+            throw new Error(`Upload failed: ${uploadResponse.statusText}`);
         }
 
-        return data;
+        const uploadToken = await uploadResponse.text();
+        console.log('Got upload token, creating media item...');
+
+        // Step 2: Create Media Item
+        const createBody = {
+            newMediaItems: [{
+                description: "Uploaded via CloudStream",
+                simpleMediaItem: {
+                    uploadToken: uploadToken,
+                    fileName: file.name
+                }
+            }]
+        };
+
+        const createResponse = await API.request('/mediaItems:batchCreate', {
+            method: 'POST',
+            body: JSON.stringify(createBody)
+        });
+
+        if (createResponse && createResponse.newMediaItemResults) {
+            const result = createResponse.newMediaItemResults[0];
+            if (result.status.message === 'Success' || result.status.code === 0) {
+                return result.mediaItem;
+            } else {
+                throw new Error(`Creation failed: ${result.status.message}`);
+            }
+        }
+        return null;
     }
 };
 

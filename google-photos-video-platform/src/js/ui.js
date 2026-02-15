@@ -34,6 +34,46 @@ const UI = {
 
         app.appendChild(mainContainer);
 
+        // Hidden Upload Input
+        const uploadInput = document.createElement('input');
+        uploadInput.type = 'file';
+        uploadInput.accept = 'video/*';
+        uploadInput.style.display = 'none';
+        app.appendChild(uploadInput);
+
+        // Upload Logic
+        document.addEventListener('triggerUpload', () => {
+            uploadInput.click();
+        });
+
+        uploadInput.onchange = async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            // Reset input so same file can be selected again if needed
+            uploadInput.value = '';
+
+            Toast.show(`Uploading "${file.name}"...`, 'info', 5000);
+
+            try {
+                const mediaItem = await API.uploadVideo(file);
+                console.log('Upload success:', mediaItem);
+                Toast.show('Upload successful! Processing video...', 'success');
+
+                // Refresh home if we are there
+                if (window.location.hash === '' || window.location.hash === '#/') {
+                    // Small delay to allow Google Photos to index
+                    setTimeout(() => {
+                        Store.set('videos', []); // Clear cache to force refresh
+                        UI.handleRoute({ route: 'home' });
+                    }, 2000);
+                }
+            } catch (err) {
+                console.error('Upload failed:', err);
+                Toast.show(`Upload failed: ${err.message}`, 'error');
+            }
+        };
+
         // Listen for Route Changes
         window.addEventListener('routeChange', (e) => UI.handleRoute(e.detail));
 
