@@ -1,5 +1,5 @@
 export default class Player {
-    constructor(container, videoUrl, posterUrl) {
+    constructor(container, videoUrl, posterUrl, options = {}) {
         this.container = container;
         this.videoUrl = videoUrl;
         this.posterUrl = posterUrl;
@@ -7,6 +7,7 @@ export default class Player {
         this.controls = null;
         this.isPlaying = false;
         this.hideControlsTimer = null;
+        this.lazy = !!options.lazy; // If true, wait for activate()
 
         this.init();
     }
@@ -119,6 +120,11 @@ export default class Player {
         this.container.addEventListener('click', unmuteOnce);
 
         this.attachEvents();
+
+        // Auto-activate unless lazy (feed uses lazy + IntersectionObserver)
+        if (!this.lazy) {
+            this.activate();
+        }
     }
 
     // Called by IntersectionObserver when the player scrolls into view
