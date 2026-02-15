@@ -103,7 +103,7 @@ export default class Player {
         `;
 
         this.container.appendChild(this.video);
-        this.container.appendChild(this.loadingOverlay);
+        // NOTE: loadingOverlay is NOT added here — only added in activate()
         this.container.appendChild(this.errorOverlay);
         this.container.appendChild(this.controls);
 
@@ -114,7 +114,11 @@ export default class Player {
 
     // Called by IntersectionObserver when the player scrolls into view
     activate() {
-        this.loadingOverlay.style.display = 'flex';
+        // Only now add the loading overlay to the DOM
+        if (!this.loadingOverlay.parentNode) {
+            this.container.insertBefore(this.loadingOverlay, this.errorOverlay);
+        }
+        this.loadingOverlay.style.display = '';
         this.video.preload = 'auto';   // Now download the full video
         this.video.play().catch(() => { });
     }
