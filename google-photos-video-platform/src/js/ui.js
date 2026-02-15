@@ -38,7 +38,6 @@ const UI = {
         const uploadInput = document.createElement('input');
         uploadInput.type = 'file';
         uploadInput.accept = 'video/*';
-        uploadInput.multiple = true; // Allow multiple files
         uploadInput.style.display = 'none';
         app.appendChild(uploadInput);
 
@@ -72,72 +71,31 @@ const UI = {
         });
 
         uploadInput.onchange = async (e) => {
-            const files = Array.from(e.target.files);
-            if (files.length === 0) return;
+            const file = e.target.files[0];
+            if (!file) return;
 
-            // Reset input
+            // Reset input so same file can be selected again if needed
             uploadInput.value = '';
 
-            // Create Progress Modal
-            const progressContent = `
-                <div class="upload-progress-container">
-                    <h3 style="margin-bottom:1rem;">Uploading ${files.length} video(s)...</h3>
-                    <div id="upload-track-list"></div>
-                    <div class="upload-progress-track">
-                        <div id="total-progress-fill" class="upload-progress-fill"></div>
-                    </div>
-                    <p id="upload-status-text" class="upload-status-text">Starting...</p>
-                </div>
-            `;
-            const progressModal = Modal('Uploading', progressContent);
-            document.body.appendChild(progressModal);
+            Toast.show(`Uploading "${file.name}"...`, 'info', 5000);
 
-            // Prevent close
-            const closeBtn = progressModal.querySelector('.close-btn');
-            if (closeBtn) closeBtn.style.display = 'none';
+            try {
+                const mediaItem = await API.uploadVideo(file);
+                console.log('Upload success:', mediaItem);
+                Toast.show('Upload successful! Processing video...', 'success');
 
-            const trackList = progressModal.querySelector('#upload-track-list');
-            const totalFill = progressModal.querySelector('#total-progress-fill');
-            const statusText = progressModal.querySelector('#upload-status-text');
-
-            let completed = 0;
-            let total = files.length;
-            let successCount = 0;
-
-            for (let i = 0; i < files.length; i++) {
-                const file = files[i];
-                const itemDiv = document.createElement('div');
-                itemDiv.className = 'upload-file-item';
-                itemDiv.innerHTML = `<span>${file.name}</span> <span class="status">⏳</span>`;
-                trackList.appendChild(itemDiv);
-
-                statusText.textContent = `Uploading ${i + 1} of ${total}: ${file.name}`;
-
-                try {
-                    const mediaItem = await API.uploadVideo(file);
-                    itemDiv.querySelector('.status').textContent = '✅';
-                    successCount++;
-
-                    const currentVideos = Store.get('videos') || [];
-                    if (mediaItem) {
-                        if (!mediaItem.mediaMetadata) mediaItem.mediaMetadata = { video: {}, creationTime: new Date().toISOString() };
-                        Store.set('videos', [mediaItem, ...currentVideos]);
-                    }
-                } catch (err) {
-                    console.error('Upload failed:', err);
-                    itemDiv.querySelector('.status').textContent = '❌';
+                // Refresh home if we are there
+                if (window.location.hash === '' || window.location.hash === '#/') {
+                    // Small delay to allow Google Photos to index
+                    setTimeout(() => {
+                        Store.set('videos', []); // Clear cache to force refresh
+                        UI.handleRoute({ route: 'home' });
+                    }, 2000);
                 }
-
-                completed++;
-                totalFill.style.width = `${(completed / total) * 100}%`;
+            } catch (err) {
+                console.error('Upload failed:', err);
+                Toast.show(`Upload failed: ${err.message}`, 'error');
             }
-
-            statusText.textContent = `Done! ${successCount} successful.`;
-            setTimeout(() => {
-                progressModal.remove();
-                UI.handleRoute({ route: 'home' });
-                Toast.show(`Uploaded ${successCount} videos`);
-            }, 1500);
         };
 
         // Listen for Route Changes
