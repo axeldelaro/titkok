@@ -10,6 +10,11 @@ export default class Player {
         // If true, don't auto-play on construction (feed uses IntersectionObserver)
         this.lazy = options.lazy === true;
         this.isBlob = this.videoUrl && this.videoUrl.startsWith('blob:');
+        // Store mediaItem ID for fresh URL fetching on error
+        this.mediaItemId = options.mediaItemId || null;
+        // Auto-retry state
+        this._retryCount = 0;
+        this._maxRetries = 3;
 
         this.init();
     }
@@ -48,16 +53,15 @@ export default class Player {
         this.errorOverlay.innerHTML = `
             <span style="font-size:2.5rem;">⚠️</span>
             <p style="margin:0.5rem 0;">Video could not be loaded</p>
-            <p style="font-size:0.8rem;color:var(--text-secondary,#aaa);margin-bottom:1rem;">The URL may have expired or the video is unavailable.</p>
+            <p style="font-size:0.8rem;color:var(--text-secondary,#aaa);margin-bottom:1rem;">Tap retry to refresh the video URL.</p>
             <button class="player-retry-btn">🔄 Retry</button>
         `;
 
-        // Retry button
+        // Manual retry button (after auto-retries exhausted)
         this.errorOverlay.querySelector('.player-retry-btn').onclick = () => {
+            this._retryCount = 0;
             this.hideError();
-            this.showLoading();
-            this.video.src = this.isBlob ? this.videoUrl : `${this.videoUrl}=dv&_t=${Date.now()}`;
-            this.video.load();
+            this._retryPlayback();
         };
 
         // ── Custom Controls ─────────────────────────────────────
@@ -79,7 +83,7 @@ export default class Player {
                 <span class="time-display">00:00 / 00:00</span>
                 <div style="flex: 1;"></div>
                 <button class="speed-btn" title="Playback speed">1x</button>
-                <button class="pip-btn" title="Picture-in-Picture">⧉</button>
+                <button class="pip-btn" title="Picture in Picture">🖼</button>
                 <button class="fullscreen-btn" title="Fullscreen (F)">⛶</button>
             </div>
         `;
@@ -92,13 +96,28 @@ export default class Player {
         this.container.style.touchAction = 'pan-y';
 
         // ── Video Events ────────────────────────────────────────
-        this.video.addEventListener('canplay', () => this.hideLoading());
-        this.video.addEventListener('playing', () => this.hideLoading());
+        this.video.addEventListener('canplay', () => {
+            this._retryCount = 0;
+            this.hideLoading();
+        });
+        this.video.addEventListener('playing', () => {
+            this._retryCount = 0;
+            this.hideLoading();
+        });
         this.video.addEventListener('error', () => {
-            if (this.video.src && this.video.networkState === 3) {
-                this.hideLoading();
-                this.showError();
-                console.error('Video load error:', this.video.error);
+            if (this.video.src && this.video.src !== window.location.href && this.video.networkState === 3) {
+                console.warn(`[Player] Error (attempt ${this._retryCount + 1}/${this._maxRetries}):`, this.video.error);
+                // Auto-retry before showing error to user
+                if (this._retryCount < this._maxRetries) {
+                    this._retryCount++;
+                    const delay = this._retryCount * 2000; // 2s, 4s, 6s
+                    console.log(`[Player] Auto-retrying in ${delay}ms...`);
+                    setTimeout(() => this._retryPlayback(), delay);
+                } else {
+                    this.hideLoading();
+                    this.showError();
+                    console.error('[Player] All retries exhausted:', this.videoUrl);
+                }
             }
         });
 
@@ -110,24 +129,52 @@ export default class Player {
         }
     }
 
-    // Show/hide helpers using class toggle (not inline style)
-    showLoading() {
-        this.loadingOverlay.classList.remove('player-overlay-hidden');
-    }
-    hideLoading() {
-        this.loadingOverlay.classList.add('player-overlay-hidden');
-    }
-    showError() {
-        this.errorOverlay.classList.remove('player-overlay-hidden');
-    }
-    hideError() {
-        this.errorOverlay.classList.add('player-overlay-hidden');
+    // Show/hide helpers
+    showLoading() { this.loadingOverlay.classList.remove('player-overlay-hidden'); }
+    hideLoading() { this.loadingOverlay.classList.add('player-overlay-hidden'); }
+    showError() { this.errorOverlay.classList.remove('player-overlay-hidden'); }
+    hideError() { this.errorOverlay.classList.add('player-overlay-hidden'); }
+
+    // Retry playback — fetch a fresh URL from the API if possible
+    async _retryPlayback() {
+        this.showLoading();
+        this.hideError();
+
+        // Blob URLs don't expire — just reload
+        if (this.isBlob) {
+            this.video.src = this.videoUrl;
+            this.video.load();
+            this.video.play().catch(() => { });
+            return;
+        }
+
+        // Try to get a FRESH baseUrl from the API (expired URLs = main cause of errors)
+        if (this.mediaItemId) {
+            try {
+                const { default: API } = await import('./api.js');
+                const fresh = await API.getVideo(this.mediaItemId);
+                if (fresh && fresh.baseUrl) {
+                    console.log('[Player] Got fresh URL from API');
+                    this.videoUrl = fresh.baseUrl;
+                    this.video.src = `${fresh.baseUrl}=dv`;
+                    this.video.load();
+                    this.video.play().catch(() => { });
+                    return;
+                }
+            } catch (e) {
+                console.warn('[Player] Could not fetch fresh URL:', e.message);
+            }
+        }
+
+        // Fallback: cache-bust the existing URL
+        this.video.src = `${this.videoUrl}=dv&_t=${Date.now()}`;
+        this.video.load();
+        this.video.play().catch(() => { });
     }
 
-    // Set src and play — used by both lazy and non-lazy paths
+    // Set src and play
     startPlayback() {
         this.showLoading();
-        // Blob URLs are local — don't append =dv
         this.video.src = this.isBlob ? this.videoUrl : `${this.videoUrl}=dv`;
         this.video.preload = 'auto';
         this.video.load();
@@ -137,10 +184,8 @@ export default class Player {
     // Called by IntersectionObserver when visible
     activate() {
         if (!this.video.src || this.video.src === window.location.href) {
-            // Not loaded yet — start playback
             this.startPlayback();
         } else {
-            // Already loaded — just resume
             this.video.play().catch(() => { });
         }
     }
@@ -202,7 +247,6 @@ export default class Player {
             const percent = (this.video.currentTime / this.video.duration) * 100;
             progressFill.style.width = `${percent}%`;
             timeDisplay.textContent = `${this.formatTime(this.video.currentTime)} / ${this.formatTime(this.video.duration)}`;
-            // Update play button state
             if (!this.video.paused && playBtn.textContent !== '⏸') {
                 playBtn.textContent = '⏸';
                 this.isPlaying = true;

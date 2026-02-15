@@ -327,7 +327,7 @@ const UI = {
 
                 const playerContainer = document.createElement('div');
                 playerContainer.className = 'feed-player-container';
-                const player = new Player(playerContainer, video.baseUrl, video.baseUrl, { lazy: true });
+                const player = new Player(playerContainer, video.baseUrl, video.baseUrl, { lazy: true, mediaItemId: video.id });
 
                 card._player = player;
 
@@ -425,7 +425,7 @@ const UI = {
         wrapper.className = 'video-page-wrapper';
 
         const playerContainer = document.createElement('div');
-        new Player(playerContainer, video.baseUrl, video.baseUrl);
+        new Player(playerContainer, video.baseUrl, video.baseUrl, { mediaItemId: video.id });
         wrapper.appendChild(playerContainer);
 
         const info = document.createElement('div');
