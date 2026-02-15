@@ -43,7 +43,31 @@ const UI = {
 
         // Upload Logic
         document.addEventListener('triggerUpload', () => {
-            uploadInput.click();
+            // Show explanation first
+            const modalContent = `
+                <div class="text-center">
+                    <p style="margin-bottom: 1rem; color: var(--text-secondary);">
+                        Using the <b>Restricted Scope</b> (appcreateddata), this app can ONLY display videos that were uploaded 
+                        <strong>through this app</strong>.
+                    </p>
+                    <p style="margin-bottom: 1.5rem;">
+                        Please select a video file from your <strong>device</strong> to upload to your Google Photos library.
+                        Once uploaded, it will appear in your feed here.
+                    </p>
+                    <button id="confirm-upload-btn" class="btn-primary" style="width:100%">
+                        Select Video File
+                    </button>
+                </div>
+            `;
+
+            const modal = Modal('Upload to Google Photos', modalContent);
+            document.body.appendChild(modal);
+
+            modal.querySelector('#confirm-upload-btn').onclick = () => {
+                modal.classList.remove('open');
+                setTimeout(() => modal.remove(), 300);
+                uploadInput.click();
+            };
         });
 
         uploadInput.onchange = async (e) => {
