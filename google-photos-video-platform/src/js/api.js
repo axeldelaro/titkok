@@ -140,6 +140,11 @@ const API = {
     },
 
     uploadVideo: async (file, onProgress) => {
+        return API.uploadMedia(file, onProgress);
+    },
+
+    // Generic upload for both images and videos
+    uploadMedia: async (file, onProgress) => {
         const token = Auth.getAccessToken();
         if (!token) throw new Error('No access token');
 
@@ -202,6 +207,32 @@ const API = {
             }
         }
         return null;
+    },
+
+    // Search for images (PHOTO type) from Google Photos
+    searchImages: async (pageToken = null, pageSize = 100) => {
+        const body = {
+            pageSize,
+            filters: {
+                mediaTypeFilter: {
+                    mediaTypes: ['PHOTO']
+                }
+            }
+        };
+
+        if (pageToken) {
+            body.pageToken = pageToken;
+        }
+
+        return API.request('/mediaItems:search', {
+            method: 'POST',
+            body: JSON.stringify(body)
+        });
+    },
+
+    // Fetch a single media item (image or video) by ID  
+    getMediaItem: async (id) => {
+        return API.request(`/mediaItems/${id}`);
     }
 };
 

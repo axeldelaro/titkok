@@ -664,12 +664,11 @@ const UI = {
         container.className = 'content feed-container';
         container.innerHTML = '';
 
-        let images;
-        try {
-            images = await Gallery.getShuffled();
-        } catch (e) {
-            images = [];
+        // Ensure images are loaded from Google Photos
+        if (Gallery.getAll().length === 0) {
+            await Gallery.fetchImages();
         }
+        const images = Gallery.getShuffled();
 
         if (images.length === 0) {
             container.className = 'content';
@@ -680,7 +679,7 @@ const UI = {
                 <div class="empty-state">
                     <span class="empty-state-icon">🖼️</span>
                     <h2>No Images Yet</h2>
-                    <p class="text-secondary">Add images to build your gallery.</p>
+                    <p class="text-secondary">Upload images to Google Photos to see them here.</p>
                     <button id="gallery-empty-upload" class="btn-primary" style="margin-top:1rem;">📷 Add Images</button>
                 </div>`;
             const galleryInput = document.createElement('input');
@@ -692,9 +691,9 @@ const UI = {
                 const files = Array.from(e.target.files);
                 if (files.length === 0) return;
                 galleryInput.value = '';
-                Toast.show(`Adding ${files.length} image${files.length > 1 ? 's' : ''}...`, 'info');
-                await Gallery.addImages(files);
-                Toast.show(`${files.length} image${files.length > 1 ? 's' : ''} added! 🎉`, 'success');
+                Toast.show(`Uploading ${files.length} image${files.length > 1 ? 's' : ''} to Google Photos...`, 'info');
+                await Gallery.uploadImages(files);
+                Toast.show(`${files.length} image${files.length > 1 ? 's' : ''} uploaded! 🎉`, 'success');
                 UI.renderGallery(container);
             };
             return;
@@ -728,9 +727,9 @@ const UI = {
             const files = Array.from(e.target.files);
             if (files.length === 0) return;
             galleryInput.value = '';
-            Toast.show(`Adding ${files.length} image${files.length > 1 ? 's' : ''}...`, 'info');
-            await Gallery.addImages(files);
-            Toast.show(`${files.length} image${files.length > 1 ? 's' : ''} added! 🎉`, 'success');
+            Toast.show(`Uploading ${files.length} image${files.length > 1 ? 's' : ''}...`, 'info');
+            await Gallery.uploadImages(files);
+            Toast.show(`Upload complete! 🎉`, 'success');
             UI.renderGallery(container);
         };
 
@@ -744,9 +743,6 @@ const UI = {
         const feed = document.createElement('div');
         feed.className = 'video-feed';
 
-        // Track blob URLs for cleanup
-        const blobURLs = [];
-
         // Create a card for each image
         const createImageCard = (image, index) => {
             const card = document.createElement('div');
@@ -757,14 +753,15 @@ const UI = {
             imgContainer.className = 'gallery-img-container';
 
             const img = document.createElement('img');
-            const blobUrl = Gallery.getBlobURL(image);
-            if (blobUrl.startsWith('blob:')) blobURLs.push(blobUrl);
-            img.src = blobUrl;
-            img.alt = image.filename;
+            img.src = Gallery.getImageURL(image);
+            img.alt = image.filename || 'Image';
             img.draggable = false;
 
-            // Detect portrait for styling
-            if (image.height > image.width * 1.2) {
+            // Detect portrait from Google Photos metadata
+            const meta = image.mediaMetadata || {};
+            const w = parseInt(meta.width) || 0;
+            const h = parseInt(meta.height) || 0;
+            if (h > w * 1.2) {
                 card.classList.add('portrait');
                 img.classList.add('gallery-img-portrait');
             } else {
@@ -777,22 +774,8 @@ const UI = {
             // Info overlay (bottom-left)
             const info = document.createElement('div');
             info.className = 'feed-info-overlay';
-            info.innerHTML = `<h3>${image.filename}</h3>`;
+            info.innerHTML = `<h3>${image.filename || 'Image'}</h3>`;
             card.appendChild(info);
-
-            // Actions (right side)
-            const actions = document.createElement('div');
-            actions.className = 'feed-actions';
-            actions.innerHTML = `
-                <button class="btn-icon gallery-del-btn" title="Delete">🗑️</button>
-            `;
-            actions.querySelector('.gallery-del-btn').onclick = async (e) => {
-                e.stopPropagation();
-                await Gallery.remove(image.id);
-                Toast.show('Image removed');
-                UI.renderGallery(container);
-            };
-            card.appendChild(actions);
 
             return card;
         };
@@ -802,7 +785,6 @@ const UI = {
         });
 
         // ── Infinite Loop Logic ──
-        // Clone first and last few images for seamless wrapping
         const CLONE_COUNT = Math.min(3, images.length);
         // Append clones of first N images at the end
         for (let i = 0; i < CLONE_COUNT; i++) {
@@ -893,7 +875,7 @@ const UI = {
             const profile = document.createElement('div');
             profile.className = 'profile-container';
 
-            const galleryCount = await Gallery.count().catch(() => 0);
+            const galleryCount = Gallery.count();
             const stats = {
                 videos: Store.get('videos').length,
                 likes: (Store.get('likes') || []).length,
