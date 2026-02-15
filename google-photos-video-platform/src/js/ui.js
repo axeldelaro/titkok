@@ -79,47 +79,67 @@ const UI = {
             // Reset input so same files can be selected again if needed
             uploadInput.value = '';
 
+            // ── INSTANT LOCAL PLAYBACK ──
+            // Create blob URLs from the files so they appear in the feed immediately
+            const localVideos = files.map(file => ({
+                id: `local_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+                filename: file.name,
+                baseUrl: URL.createObjectURL(file),
+                _isLocal: true,
+                mediaMetadata: {
+                    creationTime: new Date().toISOString(),
+                    video: {}
+                }
+            }));
+
+            // Prepend local videos to the store for instant display
+            const existing = Store.get('videos') || [];
+            Store.set('videos', [...localVideos, ...existing]);
+
+            // Re-render feed to show them NOW
+            Toast.show(`${files.length} video${files.length > 1 ? 's' : ''} ready to watch! Uploading to Google Photos...`, 'info', 4000);
+            if (window.location.hash === '' || window.location.hash === '#/' || window.location.hash === '#') {
+                const content = document.getElementById('content');
+                if (content) UI.renderHome(content);
+            } else {
+                window.location.hash = '#/';
+            }
+
+            // ── BACKGROUND UPLOAD ──
             const total = files.length;
             let successCount = 0;
             let failCount = 0;
-            const uploadedItems = [];
 
             for (let i = 0; i < total; i++) {
                 const file = files[i];
-                Toast.show(`Uploading "${file.name}" (${i + 1}/${total})...`, 'info', 5000);
-
                 try {
-                    const mediaItem = await API.uploadVideo(file);
-                    console.log('Upload success:', mediaItem);
-                    if (mediaItem) uploadedItems.push(mediaItem);
+                    await API.uploadVideo(file);
                     successCount++;
                 } catch (err) {
                     console.error(`Upload failed for ${file.name}:`, err);
-                    Toast.show(`Failed: ${file.name} — ${err.message}`, 'error');
+                    Toast.show(`Upload failed: ${file.name}`, 'error');
                     failCount++;
                 }
             }
 
             // Summary toast
             if (successCount > 0) {
-                Toast.show(`${successCount} video${successCount > 1 ? 's' : ''} uploaded successfully!`, 'success');
-            }
-            if (failCount > 0 && successCount > 0) {
-                Toast.show(`${failCount} upload${failCount > 1 ? 's' : ''} failed.`, 'error');
+                Toast.show(`✅ ${successCount}/${total} uploaded to Google Photos!`, 'success');
             }
 
-            // Refresh the feed
+            // Clean up: after upload finishes, re-fetch from API to get real URLs
+            // (only if ALL completed — don't disrupt playback in progress)
             if (successCount > 0) {
-                // Clear cache so feed re-fetches everything from API
-                Store.set('videos', []);
-                Store.set('nextPageToken', null);
-                // Navigate to home
-                if (window.location.hash === '' || window.location.hash === '#/' || window.location.hash === '#') {
-                    const content = document.getElementById('content');
-                    if (content) UI.renderHome(content);
-                } else {
-                    window.location.hash = '#/';
-                }
+                // Wait a few seconds for Google to process, then refresh silently
+                setTimeout(() => {
+                    Store.set('videos', []);
+                    Store.set('nextPageToken', null);
+                    // Only refresh if still on home
+                    if (window.location.hash === '' || window.location.hash === '#/' || window.location.hash === '#') {
+                        const content = document.getElementById('content');
+                        if (content) UI.renderHome(content);
+                    }
+                }, 10000); // 10s delay to give Google some processing time
             }
         };
 

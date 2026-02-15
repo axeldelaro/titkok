@@ -9,6 +9,7 @@ export default class Player {
         this.hideControlsTimer = null;
         // If true, don't auto-play on construction (feed uses IntersectionObserver)
         this.lazy = options.lazy === true;
+        this.isBlob = this.videoUrl && this.videoUrl.startsWith('blob:');
 
         this.init();
     }
@@ -19,7 +20,7 @@ export default class Player {
 
         // ── Video Element ───────────────────────────────────────
         this.video = document.createElement('video');
-        this.video.poster = `${this.posterUrl}=w1920-h1080`;
+        this.video.poster = this.isBlob ? '' : `${this.posterUrl}=w1920-h1080`;
         this.video.style.width = '100%';
         this.video.style.height = '100%';
         this.video.style.objectFit = 'contain';
@@ -55,7 +56,7 @@ export default class Player {
         this.errorOverlay.querySelector('.player-retry-btn').onclick = () => {
             this.hideError();
             this.showLoading();
-            this.video.src = `${this.videoUrl}=dv&_t=${Date.now()}`;
+            this.video.src = this.isBlob ? this.videoUrl : `${this.videoUrl}=dv&_t=${Date.now()}`;
             this.video.load();
         };
 
@@ -126,7 +127,8 @@ export default class Player {
     // Set src and play — used by both lazy and non-lazy paths
     startPlayback() {
         this.showLoading();
-        this.video.src = `${this.videoUrl}=dv`;
+        // Blob URLs are local — don't append =dv
+        this.video.src = this.isBlob ? this.videoUrl : `${this.videoUrl}=dv`;
         this.video.preload = 'auto';
         this.video.load();
         this.video.play().catch(() => { });
