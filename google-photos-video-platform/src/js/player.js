@@ -96,21 +96,28 @@ export default class Player {
         this.container.style.touchAction = 'pan-y';
 
         // ── Video Events ────────────────────────────────────────
-        this.video.addEventListener('canplay', () => {
+        // Multiple events to catch readiness — mobile browsers are inconsistent
+        const onReady = () => {
             this._retryCount = 0;
             this.hideLoading();
-        });
-        this.video.addEventListener('playing', () => {
-            this._retryCount = 0;
-            this.hideLoading();
-        });
+            if (this._loadingTimeout) {
+                clearTimeout(this._loadingTimeout);
+                this._loadingTimeout = null;
+            }
+        };
+        this.video.addEventListener('canplay', onReady);
+        this.video.addEventListener('playing', onReady);
+        this.video.addEventListener('loadeddata', onReady);
+        this.video.addEventListener('loadedmetadata', onReady);
+
         this.video.addEventListener('error', () => {
-            if (this.video.src && this.video.src !== window.location.href && this.video.networkState === 3) {
-                console.warn(`[Player] Error (attempt ${this._retryCount + 1}/${this._maxRetries}):`, this.video.error);
+            // Only handle real errors (src set and actually failed)
+            if (this.video.src && this.video.src !== window.location.href) {
+                console.warn(`[Player] Error (attempt ${this._retryCount + 1}/${this._maxRetries}):`, this.video.error, 'networkState:', this.video.networkState);
                 // Auto-retry before showing error to user
                 if (this._retryCount < this._maxRetries) {
                     this._retryCount++;
-                    const delay = this._retryCount * 2000; // 2s, 4s, 6s
+                    const delay = this._retryCount * 2000;
                     console.log(`[Player] Auto-retrying in ${delay}ms...`);
                     setTimeout(() => this._retryPlayback(), delay);
                 } else {
@@ -179,6 +186,13 @@ export default class Player {
         this.video.preload = 'auto';
         this.video.load();
         this.video.play().catch(() => { });
+
+        // Safety timeout: hide loading after 5s even if events don't fire (mobile quirks)
+        if (this._loadingTimeout) clearTimeout(this._loadingTimeout);
+        this._loadingTimeout = setTimeout(() => {
+            this.hideLoading();
+            this._loadingTimeout = null;
+        }, 5000);
     }
 
     // Called by IntersectionObserver when visible
