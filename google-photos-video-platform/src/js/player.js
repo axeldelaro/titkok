@@ -1,5 +1,5 @@
 export default class Player {
-    constructor(container, videoUrl, posterUrl) {
+    constructor(container, videoUrl, posterUrl, options = {}) {
         this.container = container;
         this.videoUrl = videoUrl;
         this.posterUrl = posterUrl;
@@ -7,6 +7,8 @@ export default class Player {
         this.controls = null;
         this.isPlaying = false;
         this.hideControlsTimer = null;
+        // If true, don't auto-play on construction (feed uses IntersectionObserver)
+        this.lazy = options.lazy === true;
 
         this.init();
     }
@@ -15,38 +17,33 @@ export default class Player {
         this.container.innerHTML = '';
         this.container.className = 'player-wrapper';
 
-        // Video Element — always set src, always start muted (mobile autoplay requirement)
+        // ── Video Element ───────────────────────────────────────
         this.video = document.createElement('video');
-        this.video.src = `${this.videoUrl}=dv`;
         this.video.poster = `${this.posterUrl}=w1920-h1080`;
         this.video.style.width = '100%';
         this.video.style.height = '100%';
+        this.video.style.objectFit = 'contain';
         this.video.style.backgroundColor = '#000';
-        this.video.style.touchAction = 'pan-y';        // Allow swipe scrolling
-        this.video.preload = 'metadata';                // Light: gets dimensions + duration without full download
-        this.video.muted = true;                        // MUST be muted for mobile autoplay
+        this.video.style.touchAction = 'pan-y';
+        this.video.muted = true;  // Required for mobile autoplay
         this.video.playsInline = true;
         this.video.controls = false;
         this.video.loop = true;
-
-        // Explicit HTML attributes for maximum browser compat
         this.video.setAttribute('playsinline', '');
         this.video.setAttribute('webkit-playsinline', '');
         this.video.setAttribute('muted', '');
 
-        // Loading Spinner Overlay — hidden by default, shown in activate()
+        // ── Loading Overlay (hidden via class) ──────────────────
         this.loadingOverlay = document.createElement('div');
-        this.loadingOverlay.className = 'player-loading-overlay';
-        this.loadingOverlay.style.display = 'none';
+        this.loadingOverlay.className = 'player-loading-overlay player-overlay-hidden';
         this.loadingOverlay.innerHTML = `
             <div class="player-spinner"></div>
             <span>Loading video…</span>
         `;
 
-        // Error Overlay
+        // ── Error Overlay ───────────────────────────────────────
         this.errorOverlay = document.createElement('div');
-        this.errorOverlay.className = 'player-error-overlay';
-        this.errorOverlay.style.display = 'none';
+        this.errorOverlay.className = 'player-error-overlay player-overlay-hidden';
         this.errorOverlay.innerHTML = `
             <span style="font-size:2.5rem;">⚠️</span>
             <p style="margin:0.5rem 0;">Video could not be loaded</p>
@@ -54,33 +51,15 @@ export default class Player {
             <button class="player-retry-btn">🔄 Retry</button>
         `;
 
-        // Hide loading when video is ready — handled in activate()
-        // (we don't set the listener here because canplay may fire before overlay is in DOM)
-
-        // Show error overlay on failure — but NOT for initial empty states
-        this.video.addEventListener('error', () => {
-            // Only show error if we actually have a src set
-            if (this.video.src && this.video.src !== window.location.href) {
-                this.loadingOverlay.style.display = 'none';
-                this.errorOverlay.style.display = 'flex';
-                console.error('Video load error:', this.video.error);
-            }
-        });
-
         // Retry button
         this.errorOverlay.querySelector('.player-retry-btn').onclick = () => {
-            this.errorOverlay.style.display = 'none';
-            this.loadingOverlay.style.display = '';
-            const bust = `&_t=${Date.now()}`;
-            this.video.src = `${this.videoUrl}=dv${bust}`;
+            this.hideError();
+            this.showLoading();
+            this.video.src = `${this.videoUrl}=dv&_t=${Date.now()}`;
             this.video.load();
-            // Re-listen for canplay after retry
-            this.video.addEventListener('canplay', () => {
-                this.loadingOverlay.style.display = 'none';
-            }, { once: true });
         };
 
-        // Custom Controls Overlay
+        // ── Custom Controls ─────────────────────────────────────
         this.controls = document.createElement('div');
         this.controls.className = 'player-controls';
         this.controls.innerHTML = `
@@ -104,39 +83,67 @@ export default class Player {
             </div>
         `;
 
+        // ── Build DOM ───────────────────────────────────────────
         this.container.appendChild(this.video);
-        // NOTE: loadingOverlay is NOT added here — only added in activate()
+        this.container.appendChild(this.loadingOverlay);
         this.container.appendChild(this.errorOverlay);
         this.container.appendChild(this.controls);
-
         this.container.style.touchAction = 'pan-y';
 
+        // ── Video Events ────────────────────────────────────────
+        this.video.addEventListener('canplay', () => this.hideLoading());
+        this.video.addEventListener('playing', () => this.hideLoading());
+        this.video.addEventListener('error', () => {
+            if (this.video.src && this.video.networkState === 3) {
+                this.hideLoading();
+                this.showError();
+                console.error('Video load error:', this.video.error);
+            }
+        });
+
         this.attachEvents();
+
+        // ── If not lazy, start playing immediately ──────────────
+        if (!this.lazy) {
+            this.startPlayback();
+        }
     }
 
-    // Called by IntersectionObserver when the player scrolls into view
-    activate() {
-        // Insert loading overlay
-        if (!this.loadingOverlay.parentNode) {
-            this.container.insertBefore(this.loadingOverlay, this.errorOverlay);
-        }
+    // Show/hide helpers using class toggle (not inline style)
+    showLoading() {
+        this.loadingOverlay.classList.remove('player-overlay-hidden');
+    }
+    hideLoading() {
+        this.loadingOverlay.classList.add('player-overlay-hidden');
+    }
+    showError() {
+        this.errorOverlay.classList.remove('player-overlay-hidden');
+    }
+    hideError() {
+        this.errorOverlay.classList.add('player-overlay-hidden');
+    }
 
-        // If video already has enough data, skip showing loading
-        if (this.video.readyState >= 3) {
-            this.loadingOverlay.style.display = 'none';
-        } else {
-            this.loadingOverlay.style.display = '';
-            // Listen for canplay NOW to hide the overlay
-            this.video.addEventListener('canplay', () => {
-                this.loadingOverlay.style.display = 'none';
-            }, { once: true });
-        }
-
+    // Set src and play — used by both lazy and non-lazy paths
+    startPlayback() {
+        this.showLoading();
+        this.video.src = `${this.videoUrl}=dv`;
         this.video.preload = 'auto';
+        this.video.load();
         this.video.play().catch(() => { });
     }
 
-    // Called when the player scrolls out of view
+    // Called by IntersectionObserver when visible
+    activate() {
+        if (!this.video.src || this.video.src === window.location.href) {
+            // Not loaded yet — start playback
+            this.startPlayback();
+        } else {
+            // Already loaded — just resume
+            this.video.play().catch(() => { });
+        }
+    }
+
+    // Called when scrolled out of view
     deactivate() {
         this.video.pause();
     }
@@ -169,7 +176,7 @@ export default class Player {
         playBtn.onclick = togglePlay;
         this.video.onclick = togglePlay;
 
-        // Mute Toggle — also unmutes with volume
+        // Mute Toggle
         muteBtn.onclick = () => {
             this.video.muted = !this.video.muted;
             if (!this.video.muted && this.video.volume === 0) {
@@ -184,25 +191,25 @@ export default class Player {
             const vol = parseFloat(e.target.value);
             this.video.volume = vol;
             this.video.muted = vol === 0;
-            if (vol === 0) {
-                muteBtn.textContent = '🔇';
-            } else if (vol > 0.5) {
-                muteBtn.textContent = '🔊';
-            } else {
-                muteBtn.textContent = '🔉';
-            }
+            muteBtn.textContent = vol === 0 ? '🔇' : (vol > 0.5 ? '🔊' : '🔉');
         };
 
         // Time Update
         this.video.ontimeupdate = () => {
+            if (!this.video.duration) return;
             const percent = (this.video.currentTime / this.video.duration) * 100;
             progressFill.style.width = `${percent}%`;
             timeDisplay.textContent = `${this.formatTime(this.video.currentTime)} / ${this.formatTime(this.video.duration)}`;
+            // Update play button state
+            if (!this.video.paused && playBtn.textContent !== '⏸') {
+                playBtn.textContent = '⏸';
+                this.isPlaying = true;
+            }
         };
 
         // Buffer progress
         this.video.onprogress = () => {
-            if (this.video.buffered.length > 0) {
+            if (this.video.buffered.length > 0 && this.video.duration) {
                 const bufferedEnd = this.video.buffered.end(this.video.buffered.length - 1);
                 const percent = (bufferedEnd / this.video.duration) * 100;
                 progressBuffered.style.width = `${percent}%`;
@@ -217,6 +224,7 @@ export default class Player {
 
         // Seek
         progressContainer.onclick = (e) => {
+            if (!this.video.duration) return;
             const rect = progressContainer.getBoundingClientRect();
             const pos = (e.clientX - rect.left) / rect.width;
             this.video.currentTime = pos * this.video.duration;
@@ -225,7 +233,7 @@ export default class Player {
         // Fullscreen
         fullscreenBtn.onclick = () => {
             if (!document.fullscreenElement) {
-                this.container.requestFullscreen();
+                this.container.requestFullscreen().catch(() => { });
             } else {
                 document.exitFullscreen();
             }
@@ -233,11 +241,13 @@ export default class Player {
 
         // PIP
         pipBtn.onclick = async () => {
-            if (document.pictureInPictureElement) {
-                await document.exitPictureInPicture();
-            } else if (document.pictureInPictureEnabled) {
-                await this.video.requestPictureInPicture();
-            }
+            try {
+                if (document.pictureInPictureElement) {
+                    await document.exitPictureInPicture();
+                } else if (document.pictureInPictureEnabled) {
+                    await this.video.requestPictureInPicture();
+                }
+            } catch (e) { /* PIP not supported */ }
         };
 
         // Speed control
@@ -252,7 +262,6 @@ export default class Player {
         // Keyboard shortcuts
         this._keyHandler = (e) => {
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-
             switch (e.key.toLowerCase()) {
                 case ' ':
                     e.preventDefault();
@@ -260,11 +269,7 @@ export default class Player {
                     break;
                 case 'f':
                     e.preventDefault();
-                    if (!document.fullscreenElement) {
-                        this.container.requestFullscreen();
-                    } else {
-                        document.exitFullscreen();
-                    }
+                    fullscreenBtn.click();
                     break;
                 case 'm':
                     e.preventDefault();
@@ -276,7 +281,7 @@ export default class Player {
                     break;
                 case 'arrowright':
                     e.preventDefault();
-                    this.video.currentTime = Math.min(this.video.duration, this.video.currentTime + 5);
+                    this.video.currentTime = Math.min(this.video.duration || 0, this.video.currentTime + 5);
                     break;
                 case 'arrowup':
                     e.preventDefault();
@@ -292,7 +297,7 @@ export default class Player {
         };
         document.addEventListener('keydown', this._keyHandler);
 
-        // Auto-hide controls (desktop only — mobile has always-visible via CSS)
+        // Auto-hide controls (desktop — mobile always visible via CSS)
         this.container.onmousemove = () => {
             this.controls.style.opacity = '1';
             clearTimeout(this.hideControlsTimer);
@@ -321,7 +326,8 @@ export default class Player {
         }
         if (this.video) {
             this.video.pause();
-            this.video.src = '';
+            this.video.removeAttribute('src');
+            this.video.load();
         }
     }
 }

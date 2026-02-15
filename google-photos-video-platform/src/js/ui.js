@@ -274,7 +274,7 @@ const UI = {
 
                 const playerContainer = document.createElement('div');
                 playerContainer.className = 'feed-player-container';
-                const player = new Player(playerContainer, video.baseUrl, video.baseUrl);
+                const player = new Player(playerContainer, video.baseUrl, video.baseUrl, { lazy: true });
 
                 // Store the player instance on the card for the IntersectionObserver
                 card._player = player;

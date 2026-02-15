@@ -237,6 +237,11 @@
     }
 }
 
+/* Hide overlay reliably — overrides display:flex from the parent class */
+.player-overlay-hidden {
+    display: none !important;
+}
+
 /* Player Error Overlay */
 .player-error-overlay {
     position: absolute;
