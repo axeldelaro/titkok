@@ -107,29 +107,18 @@ const UI = {
                 Toast.show(`${failCount} upload${failCount > 1 ? 's' : ''} failed.`, 'error');
             }
 
-            // Add uploaded items directly to the Store so they appear immediately
-            if (uploadedItems.length > 0) {
-                // Google Photos may still be processing — wait a moment then
-                // re-fetch each item to get a fresh baseUrl with video ready
-                Toast.show('Processing videos...', 'info', 3000);
-                await new Promise(r => setTimeout(r, 3000));
-
-                const refreshedItems = [];
-                for (const item of uploadedItems) {
-                    try {
-                        const fresh = await API.getVideo(item.id);
-                        refreshedItems.push(fresh);
-                    } catch {
-                        // Fall back to the original item
-                        refreshedItems.push(item);
-                    }
-                }
-
-                Store.setVideos(refreshedItems);
-
-                // Re-render if on home
+            // Refresh the feed by clearing the cache and re-fetching from API
+            if (successCount > 0) {
+                Toast.show('Videos uploaded! They may take a moment to appear while Google processes them.', 'info', 5000);
+                // Clear the store so renderHome re-fetches from the API
+                Store.set('videos', []);
+                Store.set('nextPageToken', null);
+                // Navigate to home and re-render
                 if (window.location.hash === '' || window.location.hash === '#/' || window.location.hash === '#') {
-                    UI.handleRoute({ route: 'home' });
+                    const content = document.getElementById('content');
+                    if (content) UI.renderHome(content);
+                } else {
+                    window.location.hash = '#/';
                 }
             }
         };
