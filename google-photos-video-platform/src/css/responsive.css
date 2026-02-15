@@ -71,15 +71,7 @@
         font-size: 1.1rem;
     }
 
-    /* Gallery grid: 2 columns on mobile */
-    .gallery-grid {
-        columns: 2 150px;
-    }
-
-    /* Always show overlay on mobile (no hover) */
-    .gallery-item-overlay {
-        opacity: 1;
-    }
+    /* Gallery uses same feed layout as videos — no extra rules needed */
 
     .volume-slider {
         display: none;
@@ -155,10 +147,7 @@
         align-items: flex-start;
     }
 
-    /* Gallery: single column on very small screens */
-    .gallery-grid {
-        columns: 1;
-    }
+
 }
 
 /* Utilities */

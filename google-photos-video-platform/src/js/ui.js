@@ -660,42 +660,70 @@ const UI = {
         container.appendChild(grid);
     },
 
-    renderGallery: (container) => {
-        const images = Gallery.getShuffled();
-
+    renderGallery: async (container) => {
+        container.className = 'content feed-container';
         container.innerHTML = '';
 
-        // Header
-        const header = document.createElement('div');
-        header.className = 'section-header';
-        header.innerHTML = `
-            <h2>🖼️ Image Gallery</h2>
-            <div style="display:flex;gap:0.5rem;align-items:center;">
-                <span class="text-secondary">${images.length} image${images.length !== 1 ? 's' : ''}</span>
-                <button id="gallery-shuffle-btn" class="btn-secondary" style="font-size:0.9rem;">🔀 Shuffle</button>
-                <button id="gallery-upload-btn" class="btn-primary btn-with-icon">
-                    <span>📷</span> Add Images
-                </button>
-            </div>
-        `;
-        container.appendChild(header);
+        let images;
+        try {
+            images = await Gallery.getShuffled();
+        } catch (e) {
+            images = [];
+        }
 
-        // Shuffle button
-        header.querySelector('#gallery-shuffle-btn').onclick = () => {
+        if (images.length === 0) {
+            container.className = 'content';
+            container.innerHTML = `
+                <div class="section-header">
+                    <h2>🖼️ Image Gallery</h2>
+                </div>
+                <div class="empty-state">
+                    <span class="empty-state-icon">🖼️</span>
+                    <h2>No Images Yet</h2>
+                    <p class="text-secondary">Add images to build your gallery.</p>
+                    <button id="gallery-empty-upload" class="btn-primary" style="margin-top:1rem;">📷 Add Images</button>
+                </div>`;
+            const galleryInput = document.createElement('input');
+            galleryInput.type = 'file'; galleryInput.accept = 'image/*';
+            galleryInput.multiple = true; galleryInput.style.display = 'none';
+            container.appendChild(galleryInput);
+            container.querySelector('#gallery-empty-upload').onclick = () => galleryInput.click();
+            galleryInput.onchange = async (e) => {
+                const files = Array.from(e.target.files);
+                if (files.length === 0) return;
+                galleryInput.value = '';
+                Toast.show(`Adding ${files.length} image${files.length > 1 ? 's' : ''}...`, 'info');
+                await Gallery.addImages(files);
+                Toast.show(`${files.length} image${files.length > 1 ? 's' : ''} added! 🎉`, 'success');
+                UI.renderGallery(container);
+            };
+            return;
+        }
+
+        // ── Floating buttons (same style as video feed) ──
+        // Shuffle
+        const shuffleBtn = document.createElement('button');
+        shuffleBtn.className = 'feed-shuffle-btn';
+        shuffleBtn.innerHTML = '🔀';
+        shuffleBtn.title = 'Shuffle';
+        shuffleBtn.onclick = () => {
             UI.renderGallery(container);
             Toast.show('Gallery shuffled! 🔀');
         };
+        container.appendChild(shuffleBtn);
 
-        // Upload button (images only)
+        // Upload button (floating)
+        const uploadBtn = document.createElement('button');
+        uploadBtn.className = 'gallery-float-upload';
+        uploadBtn.innerHTML = '📷';
+        uploadBtn.title = 'Add Images';
+        container.appendChild(uploadBtn);
+
         const galleryInput = document.createElement('input');
-        galleryInput.type = 'file';
-        galleryInput.accept = 'image/*';
-        galleryInput.multiple = true;
-        galleryInput.style.display = 'none';
+        galleryInput.type = 'file'; galleryInput.accept = 'image/*';
+        galleryInput.multiple = true; galleryInput.style.display = 'none';
         container.appendChild(galleryInput);
-
-        header.querySelector('#gallery-upload-btn').onclick = () => galleryInput.click();
-
+        uploadBtn.onclick = () => galleryInput.click();
         galleryInput.onchange = async (e) => {
             const files = Array.from(e.target.files);
             if (files.length === 0) return;
@@ -706,70 +734,152 @@ const UI = {
             UI.renderGallery(container);
         };
 
-        if (images.length === 0) {
-            const emptyState = document.createElement('div');
-            emptyState.className = 'empty-state';
-            emptyState.innerHTML = `
-                <span class="empty-state-icon">🖼️</span>
-                <h2>No Images Yet</h2>
-                <p class="text-secondary">Add images to build your gallery.</p>
-            `;
-            container.appendChild(emptyState);
-            return;
-        }
+        // Count badge
+        const countBadge = document.createElement('div');
+        countBadge.className = 'feed-count-badge';
+        countBadge.textContent = `${images.length} images`;
+        container.appendChild(countBadge);
 
-        // Masonry-style gallery grid
-        const grid = document.createElement('div');
-        grid.className = 'gallery-grid';
+        // ── Scroll container (TikTok-style) ──
+        const feed = document.createElement('div');
+        feed.className = 'video-feed';
 
-        images.forEach((image, index) => {
-            const item = document.createElement('div');
-            item.className = 'gallery-item';
-            item.style.animationDelay = `${Math.min(index * 0.05, 0.5)}s`;
+        // Track blob URLs for cleanup
+        const blobURLs = [];
 
-            // Determine span based on aspect ratio for visual variety
-            if (image.height > image.width * 1.3) {
-                item.classList.add('gallery-item-tall');
-            } else if (image.width > image.height * 1.3) {
-                item.classList.add('gallery-item-wide');
-            }
+        // Create a card for each image
+        const createImageCard = (image, index) => {
+            const card = document.createElement('div');
+            card.className = 'video-card-feed gallery-card';
+            card.dataset.idx = index;
+
+            const imgContainer = document.createElement('div');
+            imgContainer.className = 'gallery-img-container';
 
             const img = document.createElement('img');
-            img.src = image.url;
+            const blobUrl = Gallery.getBlobURL(image);
+            if (blobUrl.startsWith('blob:')) blobURLs.push(blobUrl);
+            img.src = blobUrl;
             img.alt = image.filename;
-            img.loading = 'lazy';
+            img.draggable = false;
 
-            // Overlay with actions
-            const overlay = document.createElement('div');
-            overlay.className = 'gallery-item-overlay';
-            overlay.innerHTML = `
-                <span class="gallery-item-name">${image.filename}</span>
-                <button class="gallery-delete-btn" title="Remove">🗑️</button>
+            // Detect portrait for styling
+            if (image.height > image.width * 1.2) {
+                card.classList.add('portrait');
+                img.classList.add('gallery-img-portrait');
+            } else {
+                img.classList.add('gallery-img-landscape');
+            }
+
+            imgContainer.appendChild(img);
+            card.appendChild(imgContainer);
+
+            // Info overlay (bottom-left)
+            const info = document.createElement('div');
+            info.className = 'feed-info-overlay';
+            info.innerHTML = `<h3>${image.filename}</h3>`;
+            card.appendChild(info);
+
+            // Actions (right side)
+            const actions = document.createElement('div');
+            actions.className = 'feed-actions';
+            actions.innerHTML = `
+                <button class="btn-icon gallery-del-btn" title="Delete">🗑️</button>
             `;
-
-            overlay.querySelector('.gallery-delete-btn').onclick = (e) => {
+            actions.querySelector('.gallery-del-btn').onclick = async (e) => {
                 e.stopPropagation();
-                Gallery.remove(image.id);
-                item.classList.add('gallery-item-removing');
-                setTimeout(() => item.remove(), 300);
+                await Gallery.remove(image.id);
                 Toast.show('Image removed');
+                UI.renderGallery(container);
             };
+            card.appendChild(actions);
 
-            // Full-screen view on click
-            img.onclick = () => {
-                const viewer = document.createElement('div');
-                viewer.className = 'gallery-viewer';
-                viewer.innerHTML = `<img src="${image.url}" alt="${image.filename}">`;
-                viewer.onclick = () => viewer.remove();
-                document.body.appendChild(viewer);
-            };
+            return card;
+        };
 
-            item.appendChild(img);
-            item.appendChild(overlay);
-            grid.appendChild(item);
+        images.forEach((image, i) => {
+            feed.appendChild(createImageCard(image, i));
         });
 
-        container.appendChild(grid);
+        // ── Infinite Loop Logic ──
+        // Clone first and last few images for seamless wrapping
+        const CLONE_COUNT = Math.min(3, images.length);
+        // Append clones of first N images at the end
+        for (let i = 0; i < CLONE_COUNT; i++) {
+            const clone = createImageCard(images[i], `clone-end-${i}`);
+            clone.classList.add('gallery-clone');
+            feed.appendChild(clone);
+        }
+        // Prepend clones of last N images at the start
+        for (let i = CLONE_COUNT - 1; i >= 0; i--) {
+            const srcIdx = images.length - 1 - i;
+            if (srcIdx >= 0) {
+                const clone = createImageCard(images[srcIdx], `clone-start-${i}`);
+                clone.classList.add('gallery-clone');
+                feed.insertBefore(clone, feed.firstChild);
+            }
+        }
+
+        container.appendChild(feed);
+
+        // After rendering, scroll to the first real image (skip prepended clones)
+        requestAnimationFrame(() => {
+            const firstReal = feed.children[CLONE_COUNT];
+            if (firstReal) {
+                feed.scrollTop = firstReal.offsetTop;
+            }
+        });
+
+        // Handle infinite scroll wrapping
+        let scrolling = false;
+        feed.addEventListener('scrollend', () => {
+            if (scrolling) return;
+            scrolling = true;
+
+            const cardHeight = feed.children[0]?.offsetHeight || window.innerHeight;
+            const scrollTop = feed.scrollTop;
+            const totalReal = images.length;
+            const firstRealTop = feed.children[CLONE_COUNT]?.offsetTop || 0;
+            const lastRealBottom = feed.children[CLONE_COUNT + totalReal - 1];
+
+            // If scrolled into end clones → jump to start
+            if (lastRealBottom && scrollTop >= lastRealBottom.offsetTop + cardHeight * 0.5) {
+                feed.style.scrollBehavior = 'auto';
+                feed.scrollTop = firstRealTop;
+                feed.style.scrollBehavior = '';
+            }
+            // If scrolled into start clones → jump to end
+            else if (scrollTop < firstRealTop - cardHeight * 0.5) {
+                feed.style.scrollBehavior = 'auto';
+                feed.scrollTop = lastRealBottom ? lastRealBottom.offsetTop : firstRealTop;
+                feed.style.scrollBehavior = '';
+            }
+
+            scrolling = false;
+        });
+
+        // Fallback for browsers without scrollend
+        let scrollTimer;
+        feed.addEventListener('scroll', () => {
+            clearTimeout(scrollTimer);
+            scrollTimer = setTimeout(() => {
+                feed.dispatchEvent(new Event('scrollend'));
+            }, 150);
+        });
+
+        // Update counter on scroll
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const idx = entry.target.dataset.idx;
+                    if (idx && !String(idx).startsWith('clone')) {
+                        countBadge.textContent = `${parseInt(idx) + 1} / ${images.length}`;
+                    }
+                }
+            });
+        }, { root: feed, threshold: 0.6 });
+
+        Array.from(feed.children).forEach(card => observer.observe(card));
     },
 
     renderProfile: async (container) => {
@@ -783,11 +893,12 @@ const UI = {
             const profile = document.createElement('div');
             profile.className = 'profile-container';
 
+            const galleryCount = await Gallery.count().catch(() => 0);
             const stats = {
                 videos: Store.get('videos').length,
                 likes: (Store.get('likes') || []).length,
                 playlists: (Store.get('playlists') || []).length,
-                history: (Gallery.getAll() || []).length
+                gallery: galleryCount
             };
 
             profile.innerHTML = `
@@ -822,7 +933,7 @@ const UI = {
                     </div>
                     <div class="stat-card">
                         <span class="stat-icon">🖼️</span>
-                        <span class="stat-value">${stats.history}</span>
+                        <span class="stat-value">${stats.gallery}</span>
                         <span class="stat-label">Gallery</span>
                     </div>
                 </div>
