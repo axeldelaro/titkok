@@ -15,7 +15,7 @@ const API = {
             try {
                 const token = Auth.getAccessToken();
                 if (!token) {
-                    alert('DEBUG: No access token found! isAuthenticated=' + Auth.isAuthenticated());
+                    console.warn('No access token found during request.');
                     throw new Error('No access token');
                 }
 
@@ -55,16 +55,13 @@ const API = {
                         errorMsg += `: ${errBody}`;
                     }
 
-                    if (isScopeError) {
-                        alert(`PERMISSION ERROR: ${errorMsg}\n\nThe app needs updated permissions. You will be logged out. Please log in again and ensure you check ALL scope boxes.`);
+                    if (isScopeError || response.status === 401) {
+                        console.warn('Authentication error or missing scopes. Logging out.');
                         Auth.logout();
-                    } else if (response.status === 401) {
-                        Auth.logout(); // Token expired or invalid
+                        return; // Stop processing
                     } else {
-                        alert(errorMsg + '\n\nCheck console for details.');
+                        throw new Error(errorMsg);
                     }
-
-                    throw new Error(response.statusText);
                 }
 
                 if (response.status === 429) {
@@ -156,29 +153,6 @@ const API = {
 
         return data;
     }
-    debugToken: async () => {
-        const token = Auth.getAccessToken();
-        if (!token) {
-            console.warn('Debug: No token to check');
-            return;
-        }
-        try {
-            const resp = await fetch(`https://oauth2.googleapis.com/tokeninfo?access_token=${token}`);
-            const info = await resp.json();
-            console.log('--- TOKEN DEBUG INFO ---');
-            console.log('Valid:', resp.ok);
-            console.log('Scopes:', info.scope);
-            console.log('Expires in:', info.expires_in);
-            console.log('Audience:', info.aud);
-            console.log('Error:', info.error);
-            console.log('------------------------');
-            return info;
-        } catch (e) {
-            console.error('Debug Token failed:', e);
-        }
-    },
-
-    // ... existing wrapper ...
 };
 
 export default API;
