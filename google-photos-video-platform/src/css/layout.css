@@ -103,105 +103,7 @@
     background-color: var(--bg-color);
 }
 
-/* Vertical Feed (TikTok Style) */
-.video-feed {
-    height: 100%;
-    overflow-y: scroll;
-    scroll-snap-type: y mandatory;
-    scroll-behavior: smooth;
-    /* Hide scrollbar for cleaner look */
-    scrollbar-width: none;
-}
-
-.video-feed::-webkit-scrollbar {
-    display: none;
-}
-
-.feed-video-container {
-    height: 100%;
-    width: 100%;
-    scroll-snap-align: start;
-    position: relative;
-    background: black;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-}
-
-.feed-video-player {
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-    /* Keep aspect ratio, might have black bars */
-    max-width: 600px;
-    /* Limit width on desktop */
-}
-
-/* Overlay Info on Feed */
-.feed-info-overlay {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    padding: 2rem 1rem 4rem 1rem;
-    /* Extra bottom padding for navbar/controls */
-    background: linear-gradient(to top, rgba(0, 0, 0, 0.9), transparent);
-    pointer-events: none;
-    z-index: 10;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    max-width: 600px;
-    margin: 0 auto;
-}
-
-.feed-info-overlay>* {
-    pointer-events: auto;
-}
-
-.feed-actions {
-    position: absolute;
-    right: 1rem;
-    bottom: 10rem;
-    display: flex;
-    flex-direction: column;
-    gap: 1.5rem;
-    z-index: 20;
-}
-
-.action-btn {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.3rem;
-    color: white;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
-}
-
-.action-btn span {
-    font-size: 0.8rem;
-    font-weight: 600;
-}
-
-.action-icon {
-    width: 48px;
-    height: 48px;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.15);
-    backdrop-filter: blur(4px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.5rem;
-    transition: transform 0.2s, background 0.2s;
-}
-
-.action-btn:hover .action-icon {
-    transform: scale(1.1);
-    background: rgba(255, 255, 255, 0.25);
-}
-
-/* Old Grid for other pages */
+/* Grid for Videos */
 .video-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -747,40 +649,134 @@
     background: rgba(255, 255, 255, 0.1);
 }
 
-/* Upload Progress */
-.upload-progress-container {
-    margin-top: 1rem;
+/* --- TikTok Feed Styles --- */
+.feed-container {
+    padding: 0 !important;
+    overflow: hidden !important;
+    height: 100vh;
 }
 
-.upload-file-item {
+.video-feed {
+    height: 100%;
+    overflow-y: scroll;
+    scroll-snap-type: y mandatory;
+    scrollbar-width: none;
+    /* Firefox */
+}
+
+.video-feed::-webkit-scrollbar {
+    display: none;
+    /* Chrome/Safari */
+}
+
+.video-card-feed {
+    height: 100vh;
+    width: 100%;
+    scroll-snap-align: start;
+    position: relative;
+    background: black;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.feed-player-container {
+    width: 100%;
+    height: 100%;
+    max-width: 600px;
+    /* Limit width on desktop */
+    position: relative;
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    padding: 0.5rem;
-    background: rgba(255, 255, 255, 0.05);
-    margin-bottom: 0.5rem;
-    border-radius: var(--radius-sm);
-    font-size: 0.9rem;
+    justify-content: center;
 }
 
-.upload-progress-track {
-    height: 6px;
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 3px;
-    overflow: hidden;
-    margin-top: 1rem;
-}
-
-.upload-progress-fill {
+.feed-player-container video {
+    width: 100%;
     height: 100%;
-    background: var(--primary-color);
-    width: 0%;
-    transition: width 0.3s;
+    object-fit: contain;
+    /* Keep aspect ratio */
+    max-height: 100vh;
 }
 
-.upload-status-text {
-    text-align: center;
+.feed-info-overlay {
+    position: absolute;
+    bottom: 80px;
+    /* Above bottom nav on mobile if exists */
+    left: 1rem;
+    right: 1rem;
+    padding: 1rem;
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.8), transparent);
+    color: white;
+    pointer-events: none;
+    /* Let clicks pass through */
+    max-width: 600px;
+    margin: 0 auto;
+    z-index: 10;
+}
+
+.feed-info-overlay h3 {
+    margin-bottom: 0.5rem;
+    font-size: 1.1rem;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.feed-actions {
+    display: flex;
+    gap: 1rem;
+    pointer-events: auto;
+    /* Re-enable for buttons */
     margin-top: 0.5rem;
-    color: var(--text-secondary);
-    font-size: 0.9rem;
+}
+
+.feed-actions .btn-icon {
+    background: rgba(255, 255, 255, 0.2) !important;
+    backdrop-filter: blur(4px);
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    cursor: pointer;
+    color: white;
+    transition: transform 0.2s, background 0.2s;
+}
+
+.feed-actions .btn-icon:hover {
+    transform: scale(1.1);
+    background: rgba(255, 255, 255, 0.3) !important;
+}
+
+/* --- Upload Progress Styles --- */
+.upload-progress-list {
+    max-height: 300px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.upload-item {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 0.75rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-color);
+}
+
+.upload-item-header {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.85rem;
+    margin-bottom: 0.5rem;
+}
+
+.upload-filename {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 70%;
+    font-weight: 500;
 }

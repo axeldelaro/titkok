@@ -136,27 +136,38 @@ const API = {
         const token = Auth.getAccessToken();
         if (!token) throw new Error('No access token');
 
-        // Step 1: Upload raw bytes
-        // Note: fetch doesn't support progress monitoring easily without XMLHttpRequest or Streams
-        // For simplicity, we'll just await the upload.
-
+        // Step 1: Upload raw bytes using XHR for progress tracking
         console.log('Uploading bytes...');
-        const uploadResponse = await fetch('https://photoslibrary.googleapis.com/v1/uploads', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-type': 'application/octet-stream',
-                'X-Goog-Upload-Content-Type': file.type,
-                'X-Goog-Upload-Protocol': 'raw'
-            },
-            body: file
+
+        const uploadToken = await new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', 'https://photoslibrary.googleapis.com/v1/uploads');
+            xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+            xhr.setRequestHeader('Content-type', 'application/octet-stream');
+            xhr.setRequestHeader('X-Goog-Upload-Content-Type', file.type);
+            xhr.setRequestHeader('X-Goog-Upload-Protocol', 'raw');
+
+            if (onProgress) {
+                xhr.upload.onprogress = (e) => {
+                    if (e.lengthComputable) {
+                        const percent = (e.loaded / e.total) * 100;
+                        onProgress(percent);
+                    }
+                };
+            }
+
+            xhr.onload = () => {
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    resolve(xhr.responseText);
+                } else {
+                    reject(new Error(`Upload failed: ${xhr.statusText}`));
+                }
+            };
+
+            xhr.onerror = () => reject(new Error('Network error during upload'));
+            xhr.send(file);
         });
 
-        if (!uploadResponse.ok) {
-            throw new Error(`Upload failed: ${uploadResponse.statusText}`);
-        }
-
-        const uploadToken = await uploadResponse.text();
         console.log('Got upload token, creating media item...');
 
         // Step 2: Create Media Item

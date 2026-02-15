@@ -179,11 +179,7 @@ const UI = {
     },
 
     renderHome: async (container) => {
-        // Use full height for feed
-        container.style.padding = '0';
-        container.style.height = '100%';
-        container.innerHTML = '';
-        container.appendChild(Loader());
+        container.classList.add('feed-container');
 
         try {
             let videos = Store.get('videos');
@@ -195,28 +191,66 @@ const UI = {
                 }
             }
 
-            // If still empty after fetch
+            container.innerHTML = '';
+
             if (videos.length === 0) {
-                container.style.padding = '2rem'; // Restore padding for empty state
                 container.innerHTML = `
-                    <div class="empty-state" style="margin-top: 20vh;">
+                    <div class="empty-state">
                         <span class="empty-state-icon">📹</span>
                         <h2>No Videos Found</h2>
                         <p class="text-secondary">Upload a video to get started!</p>
-                        <button id="feed-upload-btn" class="btn-primary" style="margin-top:1rem;">Upload First Video</button>
+                        <button id="feed-upload-btn" class="btn-primary" style="margin-top:1rem;">Upload Video</button>
                     </div>`;
                 container.querySelector('#feed-upload-btn').onclick = () => document.dispatchEvent(new CustomEvent('triggerUpload'));
                 return;
             }
 
-            container.innerHTML = ''; // Clear loader
             const feed = document.createElement('div');
             feed.className = 'video-feed';
 
-            // Create Observer for Autoplay
+            videos.forEach(video => {
+                const card = document.createElement('div');
+                card.className = 'video-card-feed';
+                card.dataset.id = video.id;
+
+                const playerContainer = document.createElement('div');
+                playerContainer.className = 'feed-player-container';
+                new Player(playerContainer, video.baseUrl, video.baseUrl);
+
+                const infoOverlay = document.createElement('div');
+                infoOverlay.className = 'feed-info-overlay';
+                infoOverlay.innerHTML = `
+                    <h3>${video.filename}</h3>
+                    <div class="feed-actions">
+                        <button class="btn-icon like-btn" title="Like">${Likes.isLiked(video.id) ? '❤️' : '🤍'}</button>
+                        <button class="btn-icon share-btn" title="Copy Link">🔗</button>
+                    </div>
+                `;
+
+                const likeBtn = infoOverlay.querySelector('.like-btn');
+                likeBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    const isLiked = Likes.toggleLike(video);
+                    likeBtn.textContent = isLiked ? '❤️' : '🤍';
+                };
+
+                const shareBtn = infoOverlay.querySelector('.share-btn');
+                shareBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    navigator.clipboard.writeText(`${window.location.origin}/#/video?id=${video.id}`);
+                    Toast.show('Link copied!');
+                };
+
+                card.appendChild(playerContainer);
+                card.appendChild(infoOverlay);
+                feed.appendChild(card);
+            });
+
+            container.appendChild(feed);
+
             const observerOptions = {
-                root: feed,
-                threshold: 0.6 // Play when 60% visible
+                root: null,
+                threshold: 0.6
             };
 
             const observer = new IntersectionObserver((entries) => {
@@ -225,86 +259,20 @@ const UI = {
                     if (!video) return;
 
                     if (entry.isIntersecting) {
-                        // Play
-                        video.play().catch(e => console.log('Autoplay prevented:', e));
+                        video.play().catch(() => { });
                     } else {
-                        // Pause
                         video.pause();
-                        video.currentTime = 0; // Reset ? or just pause? TikTok resets usually.
+                        video.currentTime = 0;
                     }
                 });
             }, observerOptions);
 
-            videos.forEach(video => {
-                const item = document.createElement('div');
-                item.className = 'feed-video-container';
-
-                // Construct Video Element directly
-                // Using baseUrl + 'dv' for download/video stream
-                const videoUrl = `${video.baseUrl}=dv`;
-
-                item.innerHTML = `
-                    <video class="feed-video-player" loop playsinline src="${videoUrl}"></video>
-                    
-                    <div class="feed-info-overlay">
-                        <h3 style="font-size: 1.1rem; font-weight: 600; margin-bottom: 0.5rem; text-shadow: 0 1px 2px black;">${video.filename}</h3>
-                        <p style="font-size: 0.9rem; opacity: 0.9; text-shadow: 0 1px 2px black;">${new Date(video.mediaMetadata.creationTime).toLocaleDateString()}</p>
-                    </div>
-
-                    <div class="feed-actions">
-                        <button class="action-btn like-btn" data-id="${video.id}">
-                            <div class="action-icon">${Likes.isLiked(video.id) ? '❤️' : '🤍'}</div>
-                            <span>Like</span>
-                        </button>
-                        <button class="action-btn playlist-btn">
-                            <div class="action-icon">📂</div>
-                            <span>Save</span>
-                        </button>
-                        <button class="action-btn share-btn">
-                            <div class="action-icon">🔗</div>
-                            <span>Share</span>
-                        </button>
-                    </div>
-                `;
-
-                // Handle Likes
-                const likeBtn = item.querySelector('.like-btn');
-                likeBtn.onclick = (e) => {
-                    e.stopPropagation(); // Prevent toggling play
-                    const isLiked = Likes.toggleLike(video);
-                    likeBtn.querySelector('.action-icon').innerHTML = isLiked ? '❤️' : '🤍';
-                    // Optional: Heart animation
-                };
-
-                // Handle Playlist
-                item.querySelector('.playlist-btn').onclick = (e) => {
-                    e.stopPropagation();
-                    UI.showAddToPlaylistModal(video);
-                };
-
-                // Handle Share
-                item.querySelector('.share-btn').onclick = (e) => {
-                    e.stopPropagation();
-                    navigator.clipboard.writeText(`${window.location.origin}/#/video?id=${video.id}`);
-                    Toast.show('Link copied!');
-                };
-
-                // Tap to play/pause
-                item.onclick = (e) => {
-                    const v = item.querySelector('video');
-                    if (v.paused) v.play();
-                    else v.pause();
-                };
-
-                feed.appendChild(item);
-                observer.observe(item);
+            feed.querySelectorAll('.video-card-feed').forEach(card => {
+                observer.observe(card);
             });
-
-            container.appendChild(feed);
 
         } catch (error) {
             console.error(error);
-            container.style.padding = '2rem';
             container.innerHTML = `
                 <div class="empty-state">
                     <span class="empty-state-icon">⚠️</span>
