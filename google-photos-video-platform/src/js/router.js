@@ -6,7 +6,7 @@ const routes = {
     '/playlist': 'playlist',
     '/playlists': 'playlist',
     '/likes': 'likes',
-    '/history': 'history',
+    '/gallery': 'gallery',
     '/profile': 'profile',
     '/search': 'search',
     '/login': 'login'

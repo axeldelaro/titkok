@@ -9,7 +9,7 @@ export default function Sidebar() {
         { icon: '🏠', label: 'Home', path: '#/' },
         { icon: '❤️', label: 'Liked Videos', path: '#/likes' },
         { icon: '📂', label: 'Playlists', path: '#/playlist' },
-        { icon: '🕒', label: 'History', path: '#/history' },
+        { icon: '🖼️', label: 'Gallery', path: '#/gallery' },
         { icon: '👤', label: 'Profile', path: '#/profile' },
     ];
 

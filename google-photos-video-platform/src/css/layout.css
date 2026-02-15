@@ -952,3 +952,129 @@
     z-index: 100;
     pointer-events: none;
 }
+
+/* ── Gallery Grid ───────────────────────────────────────── */
+
+.gallery-grid {
+    columns: 3 240px;
+    column-gap: 0.75rem;
+    padding: 1rem 0;
+}
+
+.gallery-item {
+    break-inside: avoid;
+    margin-bottom: 0.75rem;
+    position: relative;
+    border-radius: var(--radius-md, 12px);
+    overflow: hidden;
+    cursor: pointer;
+    animation: galleryFadeIn 0.4s ease both;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.gallery-item:hover {
+    transform: scale(1.02);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+.gallery-item img {
+    width: 100%;
+    display: block;
+    border-radius: var(--radius-md, 12px);
+}
+
+/* Overlay on hover */
+.gallery-item-overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 0.75rem;
+    background: linear-gradient(transparent, rgba(0, 0, 0, 0.75));
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    border-radius: 0 0 var(--radius-md, 12px) var(--radius-md, 12px);
+}
+
+.gallery-item:hover .gallery-item-overlay {
+    opacity: 1;
+}
+
+.gallery-item-name {
+    color: white;
+    font-size: 0.8rem;
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 75%;
+}
+
+.gallery-delete-btn {
+    background: rgba(255, 255, 255, 0.15);
+    border: none;
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    font-size: 1rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s, transform 0.15s;
+    flex-shrink: 0;
+}
+
+.gallery-delete-btn:hover {
+    background: rgba(239, 68, 68, 0.6);
+    transform: scale(1.1);
+}
+
+/* Remove animation */
+.gallery-item-removing {
+    animation: galleryFadeOut 0.3s ease forwards;
+}
+
+@keyframes galleryFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(16px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes galleryFadeOut {
+    to {
+        opacity: 0;
+        transform: scale(0.9);
+    }
+}
+
+/* Full-screen image viewer */
+.gallery-viewer {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    background: rgba(0, 0, 0, 0.92);
+    backdrop-filter: blur(20px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: zoom-out;
+    animation: galleryFadeIn 0.25s ease;
+}
+
+.gallery-viewer img {
+    max-width: 92vw;
+    max-height: 92vh;
+    object-fit: contain;
+    border-radius: var(--radius-md, 12px);
+    box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5);
+}

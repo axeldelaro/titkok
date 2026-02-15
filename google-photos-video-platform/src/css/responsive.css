@@ -71,8 +71,14 @@
         font-size: 1.1rem;
     }
 
-    .history-item-thumb {
-        width: 120px;
+    /* Gallery grid: 2 columns on mobile */
+    .gallery-grid {
+        columns: 2 150px;
+    }
+
+    /* Always show overlay on mobile (no hover) */
+    .gallery-item-overlay {
+        opacity: 1;
     }
 
     .volume-slider {
@@ -149,13 +155,9 @@
         align-items: flex-start;
     }
 
-    .history-item {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-
-    .history-item-thumb {
-        width: 100%;
+    /* Gallery: single column on very small screens */
+    .gallery-grid {
+        columns: 1;
     }
 }
 

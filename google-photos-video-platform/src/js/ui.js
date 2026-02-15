@@ -9,7 +9,7 @@ import Sidebar from '../components/sidebar.js';
 import Player from './player.js';
 import Likes from './likes.js';
 import Playlist from './playlist.js';
-import History from './history.js';
+import Gallery from './gallery.js';
 // PendingUploads removed — simple upload flow
 import { Toast } from '../components/toast.js';
 import Modal from '../components/modal.js';
@@ -162,7 +162,7 @@ const UI = {
         // Initialize features
         Likes.init();
         Playlist.init();
-        History.init();
+        Gallery.init();
     },
 
     handleRoute: async (route) => {
@@ -201,8 +201,8 @@ const UI = {
                 if (pid) UI.renderPlaylistDetail(content, pid);
                 else UI.renderPlaylists(content);
                 break;
-            case 'history':
-                UI.renderHistory(content);
+            case 'gallery':
+                UI.renderGallery(content);
                 break;
             case 'profile':
                 UI.renderProfile(content);
@@ -425,8 +425,7 @@ const UI = {
             }
         }
 
-        // Add to watch history
-        History.addToHistory(video);
+
 
         container.innerHTML = '';
         const wrapper = document.createElement('div');
@@ -661,74 +660,116 @@ const UI = {
         container.appendChild(grid);
     },
 
-    renderHistory: (container) => {
-        const history = History.getHistory();
+    renderGallery: (container) => {
+        const images = Gallery.getShuffled();
 
-        container.innerHTML = `
-            <div class="section-header">
-                <h2>🕒 Watch History</h2>
-                ${history.length > 0 ? `<button id="clear-history-btn" class="btn-secondary">Clear History</button>` : ''}
+        container.innerHTML = '';
+
+        // Header
+        const header = document.createElement('div');
+        header.className = 'section-header';
+        header.innerHTML = `
+            <h2>🖼️ Image Gallery</h2>
+            <div style="display:flex;gap:0.5rem;align-items:center;">
+                <span class="text-secondary">${images.length} image${images.length !== 1 ? 's' : ''}</span>
+                <button id="gallery-shuffle-btn" class="btn-secondary" style="font-size:0.9rem;">🔀 Shuffle</button>
+                <button id="gallery-upload-btn" class="btn-primary btn-with-icon">
+                    <span>📷</span> Add Images
+                </button>
             </div>
         `;
+        container.appendChild(header);
 
-        if (history.length > 0) {
-            container.querySelector('#clear-history-btn').onclick = () => {
-                if (confirm('Clear all watch history?')) {
-                    History.clearHistory();
-                    UI.renderHistory(container);
-                    Toast.show('History cleared');
-                }
-            };
-        }
+        // Shuffle button
+        header.querySelector('#gallery-shuffle-btn').onclick = () => {
+            UI.renderGallery(container);
+            Toast.show('Gallery shuffled! 🔀');
+        };
 
-        if (history.length === 0) {
-            container.innerHTML += `
-                <div class="empty-state">
-                    <span class="empty-state-icon">🕒</span>
-                    <h2>No Watch History</h2>
-                    <p class="text-secondary">Videos you watch will appear here.</p>
-                </div>`;
+        // Upload button (images only)
+        const galleryInput = document.createElement('input');
+        galleryInput.type = 'file';
+        galleryInput.accept = 'image/*';
+        galleryInput.multiple = true;
+        galleryInput.style.display = 'none';
+        container.appendChild(galleryInput);
+
+        header.querySelector('#gallery-upload-btn').onclick = () => galleryInput.click();
+
+        galleryInput.onchange = async (e) => {
+            const files = Array.from(e.target.files);
+            if (files.length === 0) return;
+            galleryInput.value = '';
+            Toast.show(`Adding ${files.length} image${files.length > 1 ? 's' : ''}...`, 'info');
+            await Gallery.addImages(files);
+            Toast.show(`${files.length} image${files.length > 1 ? 's' : ''} added! 🎉`, 'success');
+            UI.renderGallery(container);
+        };
+
+        if (images.length === 0) {
+            const emptyState = document.createElement('div');
+            emptyState.className = 'empty-state';
+            emptyState.innerHTML = `
+                <span class="empty-state-icon">🖼️</span>
+                <h2>No Images Yet</h2>
+                <p class="text-secondary">Add images to build your gallery.</p>
+            `;
+            container.appendChild(emptyState);
             return;
         }
 
-        const list = document.createElement('div');
-        list.className = 'history-list';
+        // Masonry-style gallery grid
+        const grid = document.createElement('div');
+        grid.className = 'gallery-grid';
 
-        history.forEach(video => {
+        images.forEach((image, index) => {
             const item = document.createElement('div');
-            item.className = 'history-item';
+            item.className = 'gallery-item';
+            item.style.animationDelay = `${Math.min(index * 0.05, 0.5)}s`;
 
-            const thumbnailUrl = `${video.baseUrl}=w240-h135-c`;
+            // Determine span based on aspect ratio for visual variety
+            if (image.height > image.width * 1.3) {
+                item.classList.add('gallery-item-tall');
+            } else if (image.width > image.height * 1.3) {
+                item.classList.add('gallery-item-wide');
+            }
 
-            item.innerHTML = `
-                <div class="history-item-thumb">
-                    <img src="${thumbnailUrl}" alt="${video.filename}" loading="lazy">
-                </div>
-                <div class="history-item-info">
-                    <h3>${video.filename}</h3>
-                    <span class="text-secondary">Watched ${UI.timeAgo(video.watchedAt)}</span>
-                </div>
-                <button class="btn-icon history-remove-btn" title="Remove from history">✕</button>
+            const img = document.createElement('img');
+            img.src = image.url;
+            img.alt = image.filename;
+            img.loading = 'lazy';
+
+            // Overlay with actions
+            const overlay = document.createElement('div');
+            overlay.className = 'gallery-item-overlay';
+            overlay.innerHTML = `
+                <span class="gallery-item-name">${image.filename}</span>
+                <button class="gallery-delete-btn" title="Remove">🗑️</button>
             `;
 
-            item.querySelector('.history-item-thumb').onclick = () => {
-                Router.navigate(`/video?id=${video.id}`);
-            };
-            item.querySelector('.history-item-info').onclick = () => {
-                Router.navigate(`/video?id=${video.id}`);
-            };
-
-            item.querySelector('.history-remove-btn').onclick = (e) => {
+            overlay.querySelector('.gallery-delete-btn').onclick = (e) => {
                 e.stopPropagation();
-                History.removeFromHistory(video.id);
-                item.remove();
-                Toast.show('Removed from history');
+                Gallery.remove(image.id);
+                item.classList.add('gallery-item-removing');
+                setTimeout(() => item.remove(), 300);
+                Toast.show('Image removed');
             };
 
-            list.appendChild(item);
+            // Full-screen view on click
+            img.onclick = () => {
+                const viewer = document.createElement('div');
+                viewer.className = 'gallery-viewer';
+                viewer.innerHTML = `<img src="${image.url}" alt="${image.filename}">`;
+                viewer.onclick = () => viewer.remove();
+                document.body.appendChild(viewer);
+            };
+
+            item.appendChild(img);
+            item.appendChild(overlay);
+            grid.appendChild(item);
         });
 
-        container.appendChild(list);
+        container.appendChild(grid);
     },
 
     renderProfile: async (container) => {
@@ -746,7 +787,7 @@ const UI = {
                 videos: Store.get('videos').length,
                 likes: (Store.get('likes') || []).length,
                 playlists: (Store.get('playlists') || []).length,
-                history: (Store.get('history') || []).length
+                history: (Gallery.getAll() || []).length
             };
 
             profile.innerHTML = `
@@ -780,9 +821,9 @@ const UI = {
                         <span class="stat-label">Playlists</span>
                     </div>
                     <div class="stat-card">
-                        <span class="stat-icon">🕒</span>
+                        <span class="stat-icon">🖼️</span>
                         <span class="stat-value">${stats.history}</span>
-                        <span class="stat-label">Watched</span>
+                        <span class="stat-label">Gallery</span>
                     </div>
                 </div>
 
