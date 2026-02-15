@@ -3,52 +3,47 @@ import Store from './store.js';
 
 const Gallery = {
     _images: [],
-    _nextPageToken: null,
     _loading: false,
+    _loaded: false,
 
     init: async () => {
-        // Load the first page of images from Google Photos
-        try {
-            await Gallery.fetchImages();
-        } catch (e) {
+        // Start loading in background — don't block UI init
+        Gallery.fetchAllImages().catch(e => {
             console.error('[Gallery] init failed:', e);
-            Store.set('gallery', []);
-        }
+        });
     },
 
-    fetchImages: async (pageToken = null) => {
+    // Fetch ALL images from Google Photos (loops through all pages)
+    fetchAllImages: async () => {
         if (Gallery._loading) return;
         Gallery._loading = true;
 
         try {
-            const data = await API.searchImages(pageToken, 100);
-            const newItems = (data && data.mediaItems) || [];
+            let allImages = [];
+            let pageToken = null;
 
-            if (pageToken) {
-                // Append to existing
-                Gallery._images = [...Gallery._images, ...newItems];
-            } else {
-                // First load / refresh
-                Gallery._images = newItems;
-            }
+            do {
+                const data = await API.searchImages(pageToken, 100);
+                const items = (data && data.mediaItems) || [];
+                allImages = [...allImages, ...items];
+                pageToken = data?.nextPageToken || null;
 
-            Gallery._nextPageToken = data?.nextPageToken || null;
-            Store.set('gallery', Gallery._images);
+                // Update store progressively so UI can show images as they load
+                Gallery._images = allImages;
+                Store.set('gallery', Gallery._images);
+            } while (pageToken);
+
+            Gallery._loaded = true;
+            console.log(`[Gallery] Loaded ${allImages.length} images from Google Photos`);
         } catch (e) {
-            console.error('[Gallery] fetchImages error:', e);
+            console.error('[Gallery] fetchAllImages error:', e);
         } finally {
             Gallery._loading = false;
         }
     },
 
-    // Load next page for infinite scroll
-    fetchMore: async () => {
-        if (!Gallery._nextPageToken || Gallery._loading) return false;
-        await Gallery.fetchImages(Gallery._nextPageToken);
-        return true;
-    },
-
-    hasMore: () => !!Gallery._nextPageToken,
+    isLoaded: () => Gallery._loaded,
+    isLoading: () => Gallery._loading,
 
     getAll: () => {
         return Gallery._images;
@@ -64,46 +59,70 @@ const Gallery = {
         return images;
     },
 
-    // Upload a single image file to Google Photos
-    uploadImage: async (file, onProgress) => {
-        return API.uploadMedia(file, onProgress);
-    },
-
-    // Upload multiple image files
-    uploadImages: async (files, onProgress) => {
+    // Upload multiple image files with per-file progress callbacks
+    uploadImages: async (files, { onFileStart, onFileProgress, onFileComplete, onFileError } = {}) => {
         const results = [];
-        for (let i = 0; i < files.length; i++) {
-            try {
-                const mediaItem = await API.uploadMedia(files[i], (percent) => {
-                    if (onProgress) {
-                        // Report overall progress across all files
-                        const overall = ((i / files.length) + (percent / 100 / files.length)) * 100;
-                        onProgress(overall);
-                    }
-                });
-                if (mediaItem) results.push(mediaItem);
-            } catch (e) {
-                console.error(`[Gallery] Failed to upload ${files[i].name}:`, e);
-            }
-        }
 
-        // Refresh the gallery after uploads
-        if (results.length > 0) {
-            await Gallery.fetchImages();
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            if (onFileStart) onFileStart(file, i, files.length);
+
+            try {
+                const mediaItem = await API.uploadMedia(file, (percent) => {
+                    if (onFileProgress) onFileProgress(file, i, files.length, percent);
+                });
+                if (mediaItem) {
+                    results.push(mediaItem);
+                    // Add to local images immediately so it shows up
+                    Gallery._images.unshift(mediaItem);
+                    Store.set('gallery', Gallery._images);
+                }
+                if (onFileComplete) onFileComplete(file, i, files.length, mediaItem);
+            } catch (e) {
+                console.error(`[Gallery] Failed to upload ${file.name}:`, e);
+                if (onFileError) onFileError(file, i, files.length, e);
+            }
         }
 
         return results;
     },
 
+    // Add local blob images for instant preview (before upload completes)
+    addLocalImages: (files) => {
+        const localImages = files.map(file => ({
+            id: `local_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+            filename: file.name,
+            baseUrl: URL.createObjectURL(file),
+            _isLocal: true,
+            mediaMetadata: {
+                creationTime: new Date().toISOString(),
+                photo: {}
+            }
+        }));
+
+        Gallery._images = [...localImages, ...Gallery._images];
+        Store.set('gallery', Gallery._images);
+        return localImages;
+    },
+
+    // Remove local placeholder images (after upload is done)
+    removeLocalImages: () => {
+        Gallery._images = Gallery._images.filter(img => !img._isLocal);
+        Store.set('gallery', Gallery._images);
+    },
+
     // Get image URL for display (Google Photos baseUrl with dimension suffix)
     getImageURL: (image, width = 1080) => {
         if (!image || !image.baseUrl) return '';
+        // Local blob URLs don't need suffixes
+        if (image._isLocal) return image.baseUrl;
         return `${image.baseUrl}=w${width}`;
     },
 
     // Get full-resolution URL
     getFullURL: (image) => {
         if (!image || !image.baseUrl) return '';
+        if (image._isLocal) return image.baseUrl;
         const meta = image.mediaMetadata || {};
         const w = meta.width || 4096;
         const h = meta.height || 4096;

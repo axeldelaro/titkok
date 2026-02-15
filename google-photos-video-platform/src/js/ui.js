@@ -664,11 +664,73 @@ const UI = {
         container.className = 'content feed-container';
         container.innerHTML = '';
 
-        // Ensure images are loaded from Google Photos
-        if (Gallery.getAll().length === 0) {
-            await Gallery.fetchImages();
+        // ── Wait for gallery to load if still fetching ──
+        if (Gallery.isLoading() || (!Gallery.isLoaded() && Gallery.getAll().length === 0)) {
+            container.appendChild(Loader());
+            // Wait for loading to complete (poll every 500ms, max 30s)
+            let waited = 0;
+            while (Gallery.isLoading() && waited < 30000) {
+                await new Promise(r => setTimeout(r, 500));
+                waited += 500;
+            }
+            // If STILL nothing after loading finished, might need a fresh fetch
+            if (Gallery.getAll().length === 0 && !Gallery.isLoaded()) {
+                await Gallery.fetchAllImages();
+            }
+            container.innerHTML = '';
         }
+
         const images = Gallery.getShuffled();
+
+        // ── Upload handler (reused in empty state and floating button) ──
+        const handleUpload = async (files) => {
+            if (files.length === 0) return;
+
+            // ── INSTANT LOCAL PREVIEW ──
+            Gallery.addLocalImages(files);
+
+            // Re-render to show them NOW
+            Toast.show(`${files.length} image${files.length > 1 ? 's' : ''} ready! Uploading to Google Photos...`, 'info', 4000);
+            const isOnGallery = window.location.hash === '#/gallery';
+            if (isOnGallery) {
+                const contentEl = document.getElementById('content');
+                if (contentEl) UI.renderGallery(contentEl);
+            }
+
+            // ── BACKGROUND UPLOAD with per-file tracking ──
+            let successCount = 0;
+            let failCount = 0;
+
+            await Gallery.uploadImages(files, {
+                onFileStart: (file, idx, total) => {
+                    Toast.show(`📤 Uploading ${idx + 1}/${total}: ${file.name}`, 'info', 3000);
+                },
+                onFileComplete: (file, idx, total) => {
+                    successCount++;
+                },
+                onFileError: (file, idx, total, err) => {
+                    failCount++;
+                    Toast.show(`❌ Failed: ${file.name}`, 'error');
+                }
+            });
+
+            // Summary
+            if (successCount > 0) {
+                Toast.show(`✅ ${successCount}/${files.length} uploaded to Google Photos!`, 'success');
+            }
+
+            // Cleanup: after uploads finish, re-fetch to get real URLs
+            if (successCount > 0) {
+                setTimeout(async () => {
+                    Gallery.removeLocalImages();
+                    await Gallery.fetchAllImages();
+                    if (window.location.hash === '#/gallery') {
+                        const contentEl = document.getElementById('content');
+                        if (contentEl) UI.renderGallery(contentEl);
+                    }
+                }, 8000); // 8s delay for Google to process
+            }
+        };
 
         if (images.length === 0) {
             container.className = 'content';
@@ -687,20 +749,11 @@ const UI = {
             galleryInput.multiple = true; galleryInput.style.display = 'none';
             container.appendChild(galleryInput);
             container.querySelector('#gallery-empty-upload').onclick = () => galleryInput.click();
-            galleryInput.onchange = async (e) => {
-                const files = Array.from(e.target.files);
-                if (files.length === 0) return;
-                galleryInput.value = '';
-                Toast.show(`Uploading ${files.length} image${files.length > 1 ? 's' : ''} to Google Photos...`, 'info');
-                await Gallery.uploadImages(files);
-                Toast.show(`${files.length} image${files.length > 1 ? 's' : ''} uploaded! 🎉`, 'success');
-                UI.renderGallery(container);
-            };
+            galleryInput.onchange = (e) => handleUpload(Array.from(e.target.files));
             return;
         }
 
-        // ── Floating buttons (same style as video feed) ──
-        // Shuffle
+        // ── Floating buttons ──
         const shuffleBtn = document.createElement('button');
         shuffleBtn.className = 'feed-shuffle-btn';
         shuffleBtn.innerHTML = '🔀';
@@ -711,7 +764,6 @@ const UI = {
         };
         container.appendChild(shuffleBtn);
 
-        // Upload button (floating)
         const uploadBtn = document.createElement('button');
         uploadBtn.className = 'gallery-float-upload';
         uploadBtn.innerHTML = '📷';
@@ -723,14 +775,9 @@ const UI = {
         galleryInput.multiple = true; galleryInput.style.display = 'none';
         container.appendChild(galleryInput);
         uploadBtn.onclick = () => galleryInput.click();
-        galleryInput.onchange = async (e) => {
-            const files = Array.from(e.target.files);
-            if (files.length === 0) return;
+        galleryInput.onchange = (e) => {
+            handleUpload(Array.from(e.target.files));
             galleryInput.value = '';
-            Toast.show(`Uploading ${files.length} image${files.length > 1 ? 's' : ''}...`, 'info');
-            await Gallery.uploadImages(files);
-            Toast.show(`Upload complete! 🎉`, 'success');
-            UI.renderGallery(container);
         };
 
         // Count badge
@@ -743,7 +790,6 @@ const UI = {
         const feed = document.createElement('div');
         feed.className = 'video-feed';
 
-        // Create a card for each image
         const createImageCard = (image, index) => {
             const card = document.createElement('div');
             card.className = 'video-card-feed gallery-card';
@@ -757,7 +803,7 @@ const UI = {
             img.alt = image.filename || 'Image';
             img.draggable = false;
 
-            // Detect portrait from Google Photos metadata
+            // Detect portrait from metadata
             const meta = image.mediaMetadata || {};
             const w = parseInt(meta.width) || 0;
             const h = parseInt(meta.height) || 0;
@@ -771,7 +817,7 @@ const UI = {
             imgContainer.appendChild(img);
             card.appendChild(imgContainer);
 
-            // Info overlay (bottom-left)
+            // Info overlay
             const info = document.createElement('div');
             info.className = 'feed-info-overlay';
             info.innerHTML = `<h3>${image.filename || 'Image'}</h3>`;
@@ -784,15 +830,13 @@ const UI = {
             feed.appendChild(createImageCard(image, i));
         });
 
-        // ── Infinite Loop Logic ──
+        // ── Infinite Loop ──
         const CLONE_COUNT = Math.min(3, images.length);
-        // Append clones of first N images at the end
         for (let i = 0; i < CLONE_COUNT; i++) {
             const clone = createImageCard(images[i], `clone-end-${i}`);
             clone.classList.add('gallery-clone');
             feed.appendChild(clone);
         }
-        // Prepend clones of last N images at the start
         for (let i = CLONE_COUNT - 1; i >= 0; i--) {
             const srcIdx = images.length - 1 - i;
             if (srcIdx >= 0) {
@@ -804,7 +848,6 @@ const UI = {
 
         container.appendChild(feed);
 
-        // After rendering, scroll to the first real image (skip prepended clones)
         requestAnimationFrame(() => {
             const firstReal = feed.children[CLONE_COUNT];
             if (firstReal) {
@@ -812,7 +855,7 @@ const UI = {
             }
         });
 
-        // Handle infinite scroll wrapping
+        // Infinite scroll wrapping
         let scrolling = false;
         feed.addEventListener('scrollend', () => {
             if (scrolling) return;
@@ -824,13 +867,11 @@ const UI = {
             const firstRealTop = feed.children[CLONE_COUNT]?.offsetTop || 0;
             const lastRealBottom = feed.children[CLONE_COUNT + totalReal - 1];
 
-            // If scrolled into end clones → jump to start
             if (lastRealBottom && scrollTop >= lastRealBottom.offsetTop + cardHeight * 0.5) {
                 feed.style.scrollBehavior = 'auto';
                 feed.scrollTop = firstRealTop;
                 feed.style.scrollBehavior = '';
             }
-            // If scrolled into start clones → jump to end
             else if (scrollTop < firstRealTop - cardHeight * 0.5) {
                 feed.style.scrollBehavior = 'auto';
                 feed.scrollTop = lastRealBottom ? lastRealBottom.offsetTop : firstRealTop;
@@ -840,7 +881,6 @@ const UI = {
             scrolling = false;
         });
 
-        // Fallback for browsers without scrollend
         let scrollTimer;
         feed.addEventListener('scroll', () => {
             clearTimeout(scrollTimer);
@@ -849,7 +889,7 @@ const UI = {
             }, 150);
         });
 
-        // Update counter on scroll
+        // Update counter
         const observer = new IntersectionObserver((entries) => {
             entries.forEach(entry => {
                 if (entry.isIntersecting) {
