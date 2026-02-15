@@ -722,6 +722,7 @@
     overflow-y: scroll;
     scroll-snap-type: y mandatory;
     scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
     /* Firefox */
 }
 
@@ -750,6 +751,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    touch-action: pan-y;
 }
 
 .feed-player-container video {

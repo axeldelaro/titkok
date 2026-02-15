@@ -104,6 +104,10 @@ export default class Player {
         this.container.appendChild(this.errorOverlay);
         this.container.appendChild(this.controls);
 
+        // Allow vertical swipe scrolling on mobile (TikTok-style feed)
+        this.video.style.touchAction = 'pan-y';
+        this.container.style.touchAction = 'pan-y';
+
         // Try to autoplay unmuted; if browser blocks, fallback to muted
         const playAttempt = this.video.play();
         if (playAttempt !== undefined) {
@@ -122,10 +126,8 @@ export default class Player {
                 this.video.volume = 1;
             }
             this.container.removeEventListener('click', unmuteOnce);
-            this.container.removeEventListener('touchstart', unmuteOnce);
         };
         this.container.addEventListener('click', unmuteOnce);
-        this.container.addEventListener('touchstart', unmuteOnce);
 
         this.attachEvents();
     }
