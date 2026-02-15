@@ -210,11 +210,21 @@ const UI = {
             const hiddenIds = Store.getHiddenIds();
 
             if (videos.length === 0) {
-                const data = await API.searchVideos();
-                if (data && data.mediaItems) {
-                    videos = data.mediaItems.filter(item => item.mediaMetadata.video);
-                    Store.setVideos(videos, data.nextPageToken);
-                }
+                // Load ALL pages from the API
+                let nextPageToken = null;
+                let allVideos = [];
+                do {
+                    const data = await API.searchVideos(nextPageToken);
+                    if (data && data.mediaItems) {
+                        const pageVideos = data.mediaItems.filter(item => item.mediaMetadata && item.mediaMetadata.video);
+                        allVideos = allVideos.concat(pageVideos);
+                    }
+                    nextPageToken = data ? data.nextPageToken : null;
+                } while (nextPageToken);
+
+                videos = allVideos;
+                Store.set('videos', videos);
+                Store.set('nextPageToken', null); // All loaded
             }
 
             // Filter out videos the user has deleted
@@ -291,7 +301,21 @@ const UI = {
                 return h > w && w > 0;
             };
 
-            videos.forEach(video => {
+            // Lazy-load observer — only activate visible videos
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    const player = entry.target._player;
+                    if (!player) return;
+                    if (entry.isIntersecting) {
+                        player.activate();
+                    } else {
+                        player.deactivate();
+                    }
+                });
+            }, { root: null, threshold: 0.6 });
+
+            // Helper: create and append a video card
+            const createVideoCard = (video) => {
                 const card = document.createElement('div');
                 card.dataset.id = video.id;
 
@@ -302,11 +326,8 @@ const UI = {
                 playerContainer.className = 'feed-player-container';
                 const player = new Player(playerContainer, video.baseUrl, video.baseUrl, { lazy: true });
 
-                // Store the player instance on the card for the IntersectionObserver
                 card._player = player;
 
-                // Fallback portrait detection: if metadata didn't have dimensions,
-                // detect from the actual video element once loaded
                 if (!isPortrait && player.video) {
                     player.video.addEventListener('loadedmetadata', () => {
                         if (player.video.videoHeight > player.video.videoWidth) {
@@ -315,12 +336,12 @@ const UI = {
                     });
                 }
 
-                // Info overlay (title only — pointer-events: none)
+                // Info overlay
                 const infoOverlay = document.createElement('div');
                 infoOverlay.className = 'feed-info-overlay';
                 infoOverlay.innerHTML = `<h3>${video.filename}</h3>`;
 
-                // Action buttons — separate container, always clickable
+                // Action buttons
                 const actions = document.createElement('div');
                 actions.className = 'feed-actions';
                 actions.innerHTML = `
@@ -352,32 +373,19 @@ const UI = {
                 card.appendChild(infoOverlay);
                 card.appendChild(actions);
                 feed.appendChild(card);
-            });
-
-            container.appendChild(feed);
-
-            // Lazy-load: only activate the video that is currently visible
-            const observerOptions = {
-                root: null,
-                threshold: 0.6
+                observer.observe(card);
             };
 
-            const observer = new IntersectionObserver((entries) => {
-                entries.forEach(entry => {
-                    const player = entry.target._player;
-                    if (!player) return;
+            // Render all videos
+            videos.forEach(video => createVideoCard(video));
 
-                    if (entry.isIntersecting) {
-                        player.activate();
-                    } else {
-                        player.deactivate();
-                    }
-                });
-            }, observerOptions);
+            // Video count badge
+            const countBadge = document.createElement('div');
+            countBadge.className = 'feed-count-badge';
+            countBadge.textContent = `${videos.length} videos`;
+            container.appendChild(countBadge);
 
-            feed.querySelectorAll('.video-card-feed').forEach(card => {
-                observer.observe(card);
-            });
+            container.appendChild(feed);
 
         } catch (error) {
             console.error(error);

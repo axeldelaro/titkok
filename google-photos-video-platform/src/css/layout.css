@@ -936,3 +936,19 @@
     border-radius: var(--radius-lg, 12px);
     overflow: hidden;
 }
+
+/* Video count badge */
+.feed-count-badge {
+    position: fixed;
+    top: calc(var(--header-height) + 0.5rem);
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(8px);
+    color: var(--text-secondary);
+    padding: 0.25rem 0.75rem;
+    border-radius: var(--radius-full);
+    font-size: 0.75rem;
+    z-index: 100;
+    pointer-events: none;
+}

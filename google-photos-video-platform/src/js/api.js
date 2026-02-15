@@ -89,7 +89,7 @@ const API = {
         }
     },
 
-    searchVideos: async (pageToken = null, pageSize = 25) => {
+    searchVideos: async (pageToken = null, pageSize = 100) => {
         // Cache key logic could go here
 
         const body = {
