@@ -103,7 +103,105 @@
     background-color: var(--bg-color);
 }
 
-/* Grid for Videos */
+/* Vertical Feed (TikTok Style) */
+.video-feed {
+    height: 100%;
+    overflow-y: scroll;
+    scroll-snap-type: y mandatory;
+    scroll-behavior: smooth;
+    /* Hide scrollbar for cleaner look */
+    scrollbar-width: none;
+}
+
+.video-feed::-webkit-scrollbar {
+    display: none;
+}
+
+.feed-video-container {
+    height: 100%;
+    width: 100%;
+    scroll-snap-align: start;
+    position: relative;
+    background: black;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.feed-video-player {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    /* Keep aspect ratio, might have black bars */
+    max-width: 600px;
+    /* Limit width on desktop */
+}
+
+/* Overlay Info on Feed */
+.feed-info-overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 2rem 1rem 4rem 1rem;
+    /* Extra bottom padding for navbar/controls */
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.9), transparent);
+    pointer-events: none;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.feed-info-overlay>* {
+    pointer-events: auto;
+}
+
+.feed-actions {
+    position: absolute;
+    right: 1rem;
+    bottom: 10rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    z-index: 20;
+}
+
+.action-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.3rem;
+    color: white;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.action-btn span {
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.action-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    transition: transform 0.2s, background 0.2s;
+}
+
+.action-btn:hover .action-icon {
+    transform: scale(1.1);
+    background: rgba(255, 255, 255, 0.25);
+}
+
+/* Old Grid for other pages */
 .video-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -647,4 +745,42 @@
 
 .modal-playlist-item:hover {
     background: rgba(255, 255, 255, 0.1);
+}
+
+/* Upload Progress */
+.upload-progress-container {
+    margin-top: 1rem;
+}
+
+.upload-file-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.5rem;
+    background: rgba(255, 255, 255, 0.05);
+    margin-bottom: 0.5rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.9rem;
+}
+
+.upload-progress-track {
+    height: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-top: 1rem;
+}
+
+.upload-progress-fill {
+    height: 100%;
+    background: var(--primary-color);
+    width: 0%;
+    transition: width 0.3s;
+}
+
+.upload-status-text {
+    text-align: center;
+    margin-top: 0.5rem;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
 }

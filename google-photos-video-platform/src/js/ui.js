@@ -38,6 +38,7 @@ const UI = {
         const uploadInput = document.createElement('input');
         uploadInput.type = 'file';
         uploadInput.accept = 'video/*';
+        uploadInput.multiple = true; // Allow multiple files
         uploadInput.style.display = 'none';
         app.appendChild(uploadInput);
 
@@ -71,31 +72,72 @@ const UI = {
         });
 
         uploadInput.onchange = async (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
+            const files = Array.from(e.target.files);
+            if (files.length === 0) return;
 
-            // Reset input so same file can be selected again if needed
+            // Reset input
             uploadInput.value = '';
 
-            Toast.show(`Uploading "${file.name}"...`, 'info', 5000);
+            // Create Progress Modal
+            const progressContent = `
+                <div class="upload-progress-container">
+                    <h3 style="margin-bottom:1rem;">Uploading ${files.length} video(s)...</h3>
+                    <div id="upload-track-list"></div>
+                    <div class="upload-progress-track">
+                        <div id="total-progress-fill" class="upload-progress-fill"></div>
+                    </div>
+                    <p id="upload-status-text" class="upload-status-text">Starting...</p>
+                </div>
+            `;
+            const progressModal = Modal('Uploading', progressContent);
+            document.body.appendChild(progressModal);
 
-            try {
-                const mediaItem = await API.uploadVideo(file);
-                console.log('Upload success:', mediaItem);
-                Toast.show('Upload successful! Processing video...', 'success');
+            // Prevent close
+            const closeBtn = progressModal.querySelector('.close-btn');
+            if (closeBtn) closeBtn.style.display = 'none';
 
-                // Refresh home if we are there
-                if (window.location.hash === '' || window.location.hash === '#/') {
-                    // Small delay to allow Google Photos to index
-                    setTimeout(() => {
-                        Store.set('videos', []); // Clear cache to force refresh
-                        UI.handleRoute({ route: 'home' });
-                    }, 2000);
+            const trackList = progressModal.querySelector('#upload-track-list');
+            const totalFill = progressModal.querySelector('#total-progress-fill');
+            const statusText = progressModal.querySelector('#upload-status-text');
+
+            let completed = 0;
+            let total = files.length;
+            let successCount = 0;
+
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'upload-file-item';
+                itemDiv.innerHTML = `<span>${file.name}</span> <span class="status">⏳</span>`;
+                trackList.appendChild(itemDiv);
+
+                statusText.textContent = `Uploading ${i + 1} of ${total}: ${file.name}`;
+
+                try {
+                    const mediaItem = await API.uploadVideo(file);
+                    itemDiv.querySelector('.status').textContent = '✅';
+                    successCount++;
+
+                    const currentVideos = Store.get('videos') || [];
+                    if (mediaItem) {
+                        if (!mediaItem.mediaMetadata) mediaItem.mediaMetadata = { video: {}, creationTime: new Date().toISOString() };
+                        Store.set('videos', [mediaItem, ...currentVideos]);
+                    }
+                } catch (err) {
+                    console.error('Upload failed:', err);
+                    itemDiv.querySelector('.status').textContent = '❌';
                 }
-            } catch (err) {
-                console.error('Upload failed:', err);
-                Toast.show(`Upload failed: ${err.message}`, 'error');
+
+                completed++;
+                totalFill.style.width = `${(completed / total) * 100}%`;
             }
+
+            statusText.textContent = `Done! ${successCount} successful.`;
+            setTimeout(() => {
+                progressModal.remove();
+                UI.handleRoute({ route: 'home' });
+                Toast.show(`Uploaded ${successCount} videos`);
+            }, 1500);
         };
 
         // Listen for Route Changes
@@ -179,6 +221,10 @@ const UI = {
     },
 
     renderHome: async (container) => {
+        // Use full height for feed
+        container.style.padding = '0';
+        container.style.height = '100%';
+        container.innerHTML = '';
         container.appendChild(Loader());
 
         try {
@@ -191,52 +237,122 @@ const UI = {
                 }
             }
 
-            container.innerHTML = `
-                <div class="section-header">
-                    <h2>Recommended</h2>
-                    <button id="shuffle-play-btn" class="btn-primary btn-with-icon">
-                        <span>🔀</span> Shuffle Play
-                    </button>
-                </div>
-            `;
-
-            const shuffleBtn = container.querySelector('#shuffle-play-btn');
-            shuffleBtn.onclick = () => {
-                if (videos.length > 0) {
-                    const randomVideo = videos[Math.floor(Math.random() * videos.length)];
-                    Router.navigate(`/video?id=${randomVideo.id}`);
-                } else {
-                    Toast.show('No videos to shuffle', 'error');
-                }
-            };
-
-            const grid = document.createElement('div');
-            grid.className = 'video-grid';
-
-            videos.forEach(video => {
-                grid.appendChild(VideoCard(video));
-            });
-
-            container.appendChild(grid);
-
+            // If still empty after fetch
             if (videos.length === 0) {
+                container.style.padding = '2rem'; // Restore padding for empty state
                 container.innerHTML = `
-                    <div class="empty-state">
+                    <div class="empty-state" style="margin-top: 20vh;">
                         <span class="empty-state-icon">📹</span>
                         <h2>No Videos Found</h2>
-                        <p class="text-secondary">Your Google Photos library doesn't contain any videos yet.</p>
+                        <p class="text-secondary">Upload a video to get started!</p>
+                        <button id="feed-upload-btn" class="btn-primary" style="margin-top:1rem;">Upload First Video</button>
                     </div>`;
+                container.querySelector('#feed-upload-btn').onclick = () => document.dispatchEvent(new CustomEvent('triggerUpload'));
+                return;
             }
+
+            container.innerHTML = ''; // Clear loader
+            const feed = document.createElement('div');
+            feed.className = 'video-feed';
+
+            // Create Observer for Autoplay
+            const observerOptions = {
+                root: feed,
+                threshold: 0.6 // Play when 60% visible
+            };
+
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    const video = entry.target.querySelector('video');
+                    if (!video) return;
+
+                    if (entry.isIntersecting) {
+                        // Play
+                        video.play().catch(e => console.log('Autoplay prevented:', e));
+                    } else {
+                        // Pause
+                        video.pause();
+                        video.currentTime = 0; // Reset ? or just pause? TikTok resets usually.
+                    }
+                });
+            }, observerOptions);
+
+            videos.forEach(video => {
+                const item = document.createElement('div');
+                item.className = 'feed-video-container';
+
+                // Construct Video Element directly
+                // Using baseUrl + 'dv' for download/video stream
+                const videoUrl = `${video.baseUrl}=dv`;
+
+                item.innerHTML = `
+                    <video class="feed-video-player" loop playsinline src="${videoUrl}"></video>
+                    
+                    <div class="feed-info-overlay">
+                        <h3 style="font-size: 1.1rem; font-weight: 600; margin-bottom: 0.5rem; text-shadow: 0 1px 2px black;">${video.filename}</h3>
+                        <p style="font-size: 0.9rem; opacity: 0.9; text-shadow: 0 1px 2px black;">${new Date(video.mediaMetadata.creationTime).toLocaleDateString()}</p>
+                    </div>
+
+                    <div class="feed-actions">
+                        <button class="action-btn like-btn" data-id="${video.id}">
+                            <div class="action-icon">${Likes.isLiked(video.id) ? '❤️' : '🤍'}</div>
+                            <span>Like</span>
+                        </button>
+                        <button class="action-btn playlist-btn">
+                            <div class="action-icon">📂</div>
+                            <span>Save</span>
+                        </button>
+                        <button class="action-btn share-btn">
+                            <div class="action-icon">🔗</div>
+                            <span>Share</span>
+                        </button>
+                    </div>
+                `;
+
+                // Handle Likes
+                const likeBtn = item.querySelector('.like-btn');
+                likeBtn.onclick = (e) => {
+                    e.stopPropagation(); // Prevent toggling play
+                    const isLiked = Likes.toggleLike(video);
+                    likeBtn.querySelector('.action-icon').innerHTML = isLiked ? '❤️' : '🤍';
+                    // Optional: Heart animation
+                };
+
+                // Handle Playlist
+                item.querySelector('.playlist-btn').onclick = (e) => {
+                    e.stopPropagation();
+                    UI.showAddToPlaylistModal(video);
+                };
+
+                // Handle Share
+                item.querySelector('.share-btn').onclick = (e) => {
+                    e.stopPropagation();
+                    navigator.clipboard.writeText(`${window.location.origin}/#/video?id=${video.id}`);
+                    Toast.show('Link copied!');
+                };
+
+                // Tap to play/pause
+                item.onclick = (e) => {
+                    const v = item.querySelector('video');
+                    if (v.paused) v.play();
+                    else v.pause();
+                };
+
+                feed.appendChild(item);
+                observer.observe(item);
+            });
+
+            container.appendChild(feed);
 
         } catch (error) {
             console.error(error);
+            container.style.padding = '2rem';
             container.innerHTML = `
                 <div class="empty-state">
                     <span class="empty-state-icon">⚠️</span>
-                    <h2>Error Loading Videos</h2>
+                    <h2>Error Loading Feed</h2>
                     <p class="text-secondary">${error.message}</p>
                 </div>`;
-            Toast.show('Failed to load videos', 'error');
         }
     },
 
