@@ -19,10 +19,61 @@ export default class Player {
         this.video = document.createElement('video');
         this.video.src = `${this.videoUrl}=dv`;
         this.video.poster = `${this.posterUrl}=w1920-h1080`;
+        this.video.crossOrigin = 'anonymous';
         this.video.style.width = '100%';
         this.video.style.height = '100%';
         this.video.style.backgroundColor = '#000';
-        this.video.preload = 'metadata';
+        this.video.preload = 'auto';
+        this.video.muted = true;
+        this.video.playsInline = true;
+        this.video.controls = false;
+        this.video.loop = true;
+
+        // Explicit HTML attributes — required by browser autoplay policies
+        this.video.setAttribute('autoplay', '');
+        this.video.setAttribute('muted', '');
+        this.video.setAttribute('playsinline', '');
+
+        // Loading Spinner Overlay
+        this.loadingOverlay = document.createElement('div');
+        this.loadingOverlay.className = 'player-loading-overlay';
+        this.loadingOverlay.innerHTML = `
+            <div class="player-spinner"></div>
+            <span>Loading video…</span>
+        `;
+
+        // Error Overlay
+        this.errorOverlay = document.createElement('div');
+        this.errorOverlay.className = 'player-error-overlay';
+        this.errorOverlay.style.display = 'none';
+        this.errorOverlay.innerHTML = `
+            <span style="font-size:2.5rem;">⚠️</span>
+            <p style="margin:0.5rem 0;">Video could not be loaded</p>
+            <p style="font-size:0.8rem;color:var(--text-secondary,#aaa);margin-bottom:1rem;">The URL may have expired or the video is unavailable.</p>
+            <button class="player-retry-btn">🔄 Retry</button>
+        `;
+
+        // Hide loading when video is ready
+        this.video.addEventListener('canplay', () => {
+            this.loadingOverlay.style.display = 'none';
+        });
+
+        // Show error overlay on failure
+        this.video.addEventListener('error', () => {
+            this.loadingOverlay.style.display = 'none';
+            this.errorOverlay.style.display = 'flex';
+            console.error('Video load error:', this.video.error);
+        });
+
+        // Retry button
+        this.errorOverlay.querySelector('.player-retry-btn').onclick = () => {
+            this.errorOverlay.style.display = 'none';
+            this.loadingOverlay.style.display = 'flex';
+            // Try removing crossOrigin as a workaround for CORS issues
+            this.video.removeAttribute('crossorigin');
+            this.video.src = `${this.videoUrl}=dv`;
+            this.video.load();
+        };
 
         // Custom Controls Overlay
         this.controls = document.createElement('div');
@@ -49,6 +100,8 @@ export default class Player {
         `;
 
         this.container.appendChild(this.video);
+        this.container.appendChild(this.loadingOverlay);
+        this.container.appendChild(this.errorOverlay);
         this.container.appendChild(this.controls);
 
         this.attachEvents();
@@ -82,14 +135,9 @@ export default class Player {
         playBtn.onclick = togglePlay;
         this.video.onclick = togglePlay;
 
-        // Double click for fullscreen
-        this.video.ondblclick = () => {
-            if (!document.fullscreenElement) {
-                this.container.requestFullscreen();
-            } else {
-                document.exitFullscreen();
-            }
-        };
+        // Toggle play on click (already handled above)
+        // this.video.onclick = togglePlay; 
+        // Note: We leave click handling to the container or overlay in the UI to prevent conflict
 
         // Mute Toggle
         muteBtn.onclick = () => {

@@ -38,6 +38,7 @@ const UI = {
         const uploadInput = document.createElement('input');
         uploadInput.type = 'file';
         uploadInput.accept = 'video/*';
+        uploadInput.multiple = true;
         uploadInput.style.display = 'none';
         app.appendChild(uploadInput);
 
@@ -51,11 +52,11 @@ const UI = {
                         <strong>through this app</strong>.
                     </p>
                     <p style="margin-bottom: 1.5rem;">
-                        Please select a video file from your <strong>device</strong> to upload to your Google Photos library.
-                        Once uploaded, it will appear in your feed here.
+                        Select one or more video files from your <strong>device</strong> to upload to your Google Photos library.
+                        Once uploaded, they will appear in your feed here.
                     </p>
                     <button id="confirm-upload-btn" class="btn-primary" style="width:100%">
-                        Select Video File
+                        Select Video(s)
                     </button>
                 </div>
             `;
@@ -71,30 +72,45 @@ const UI = {
         });
 
         uploadInput.onchange = async (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
+            const files = Array.from(e.target.files);
+            if (files.length === 0) return;
 
-            // Reset input so same file can be selected again if needed
+            // Reset input so same files can be selected again if needed
             uploadInput.value = '';
 
-            Toast.show(`Uploading "${file.name}"...`, 'info', 5000);
+            const total = files.length;
+            let successCount = 0;
+            let failCount = 0;
 
-            try {
-                const mediaItem = await API.uploadVideo(file);
-                console.log('Upload success:', mediaItem);
-                Toast.show('Upload successful! Processing video...', 'success');
+            for (let i = 0; i < total; i++) {
+                const file = files[i];
+                Toast.show(`Uploading "${file.name}" (${i + 1}/${total})...`, 'info', 5000);
 
-                // Refresh home if we are there
-                if (window.location.hash === '' || window.location.hash === '#/') {
-                    // Small delay to allow Google Photos to index
-                    setTimeout(() => {
-                        Store.set('videos', []); // Clear cache to force refresh
-                        UI.handleRoute({ route: 'home' });
-                    }, 2000);
+                try {
+                    const mediaItem = await API.uploadVideo(file);
+                    console.log('Upload success:', mediaItem);
+                    successCount++;
+                } catch (err) {
+                    console.error(`Upload failed for ${file.name}:`, err);
+                    Toast.show(`Failed: ${file.name} — ${err.message}`, 'error');
+                    failCount++;
                 }
-            } catch (err) {
-                console.error('Upload failed:', err);
-                Toast.show(`Upload failed: ${err.message}`, 'error');
+            }
+
+            // Summary toast
+            if (successCount > 0) {
+                Toast.show(`${successCount} video${successCount > 1 ? 's' : ''} uploaded successfully!`, 'success');
+            }
+            if (failCount > 0 && successCount > 0) {
+                Toast.show(`${failCount} upload${failCount > 1 ? 's' : ''} failed.`, 'error');
+            }
+
+            // Refresh home feed if we are there
+            if (successCount > 0 && (window.location.hash === '' || window.location.hash === '#/')) {
+                setTimeout(() => {
+                    Store.set('videos', []);
+                    UI.handleRoute({ route: 'home' });
+                }, 2000);
             }
         };
 
