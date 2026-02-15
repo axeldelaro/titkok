@@ -128,8 +128,15 @@ const API = {
     },
 
     searchByFilename: async (query, pageToken = null, pageSize = 25) => {
-        // ... existing code ...
-        return data; // Keep existing return
+        // Google Photos API doesn't support filename search
+        // Fetch all videos and filter client-side
+        const data = await API.searchVideos(pageToken, pageSize);
+        if (data && data.mediaItems) {
+            data.mediaItems = data.mediaItems.filter(item =>
+                item.filename && item.filename.toLowerCase().includes(query.toLowerCase())
+            );
+        }
+        return data;
     },
 
     uploadVideo: async (file, onProgress) => {

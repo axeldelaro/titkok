@@ -99,8 +99,8 @@ const UI = {
             // Re-render feed to show them NOW
             Toast.show(`${files.length} video${files.length > 1 ? 's' : ''} ready to watch! Uploading to Google Photos...`, 'info', 4000);
             if (window.location.hash === '' || window.location.hash === '#/' || window.location.hash === '#') {
-                const content = document.getElementById('content');
-                if (content) UI.renderHome(content);
+                const contentEl = document.getElementById('content');
+                if (contentEl) UI.renderHome(contentEl);
             } else {
                 window.location.hash = '#/';
             }
@@ -136,8 +136,8 @@ const UI = {
                     Store.set('nextPageToken', null);
                     // Only refresh if still on home
                     if (window.location.hash === '' || window.location.hash === '#/' || window.location.hash === '#') {
-                        const content = document.getElementById('content');
-                        if (content) UI.renderHome(content);
+                        const contentEl = document.getElementById('content');
+                        if (contentEl) UI.renderHome(contentEl);
                     }
                 }, 10000); // 10s delay to give Google some processing time
             }
@@ -224,7 +224,7 @@ const UI = {
     },
 
     renderHome: async (container) => {
-        container.classList.add('feed-container');
+        container.className = 'content feed-container';
 
         try {
             let videos = Store.get('videos');
@@ -361,12 +361,20 @@ const UI = {
 
                 actions.querySelector('.share-btn').onclick = (e) => {
                     e.stopPropagation();
+                    if (video._isLocal) {
+                        Toast.show('Link available after upload completes', 'info');
+                        return;
+                    }
                     navigator.clipboard.writeText(`${window.location.origin}/#/video?id=${video.id}`);
                     Toast.show('Link copied!');
                 };
 
                 actions.querySelector('.delete-btn').onclick = (e) => {
                     e.stopPropagation();
+                    // Revoke blob URL to free memory
+                    if (video._isLocal && video.baseUrl) {
+                        try { URL.revokeObjectURL(video.baseUrl); } catch (ex) { }
+                    }
                     Store.removeVideo(video.id);
                     card.remove();
                     Toast.show('Video removed from feed');

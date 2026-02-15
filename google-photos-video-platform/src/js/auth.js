@@ -107,8 +107,8 @@ const Auth = {
             const expiresAt = new Date().getTime() + (data.expires_in * 1000) - 60000; // Buffer 1 min
             Storage.set('expires_at', expiresAt, 'session');
 
-            // DEBUG: Show what we got
-            alert('LOGIN SUCCESS!\n\nRequested: ' + SCOPES + '\n\nGRANTED: ' + data.scope + '\n\nPlease verify that the GRANTED scopes match the REQUESTED scopes.');
+            // Log scopes for debugging (no alert blocking UI)
+            console.log('LOGIN SUCCESS — granted scopes:', data.scope);
 
             // Clean up
             Storage.remove('code_verifier', 'session');
