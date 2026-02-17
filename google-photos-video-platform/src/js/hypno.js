@@ -40,13 +40,16 @@ const ChaosEngine = {
         chaosTimers.forEach(t => clearTimeout(t));
         chaosTimers = [];
 
-        // Clean layers & classes
-        const layers = container.querySelectorAll('.hypno-spiral, .hypno-vignette, .hypno-static, .hypno-subliminal-text');
-        layers.forEach(el => el.remove());
+        // Fix: Check if container exists before querying
+        if (container) {
+            const layers = container.querySelectorAll('.hypno-spiral, .hypno-vignette, .hypno-static, .hypno-subliminal-text');
+            layers.forEach(el => el.remove());
+        }
         document.body.classList.remove('hypno-breathe', 'hypno-glitch', 'hypno-hue-shift', 'hypno-mirror-x', 'hypno-mirror-y');
     },
 
     addLayer(container, className) {
+        if (!container) return null; // Safety check
         if (!container.querySelector(`.${className}`)) {
             const el = document.createElement('div');
             el.className = className;
@@ -251,14 +254,26 @@ const runGame = (popup, img, type) => {
         label.innerText = `🎯 0/${needed}`;
         popup.appendChild(label);
         let canDodge = true;
+
+        // Improve movement logic
         const dodge = () => {
             if (!canDodge) return;
-            popup.style.left = Math.random() * (window.innerWidth - popup.offsetWidth) + 'px';
-            popup.style.top = Math.random() * (window.innerHeight - popup.offsetHeight) + 'px';
+            // Ensure it stays within bounds
+            const maxX = window.innerWidth - popup.offsetWidth;
+            const maxY = window.innerHeight - popup.offsetHeight;
+            popup.style.left = Math.max(0, Math.min(maxX, Math.random() * maxX)) + 'px';
+            popup.style.top = Math.max(0, Math.min(maxY, Math.random() * maxY)) + 'px';
         };
-        popup.addEventListener('touchstart', (e) => { e.preventDefault(); if (canDodge) dodge(); }, { passive: false });
-        popup.addEventListener('mouseenter', () => { if (canDodge) dodge(); });
-        popup.addEventListener('mousedown', (e) => {
+
+        const onTouchStart = (e) => {
+            // Mobile dodge on touch
+            if (canDodge) {
+                e.preventDefault();
+                dodge();
+            }
+        };
+
+        const onAttempt = (e) => {
             e.preventDefault(); e.stopPropagation();
             catches++;
             label.innerText = `🎯 ${catches}/${needed}`;
@@ -268,6 +283,14 @@ const runGame = (popup, img, type) => {
                 if (catches >= needed) dismissPopup(popup);
                 else { canDodge = true; popup.style.transform = ''; dodge(); }
             }, 300);
+        };
+
+        popup.addEventListener('touchstart', onTouchStart, { passive: false });
+        popup.addEventListener('mouseenter', () => { if (canDodge) dodge(); });
+        popup.addEventListener('mousedown', onAttempt);
+        // Add touchend as backup for catching if touchstart didn't dodge
+        popup.addEventListener('touchend', (e) => {
+            if (!canDodge) onAttempt(e);
         });
     }
     // 4. SWIPE (300px)
@@ -277,35 +300,56 @@ const runGame = (popup, img, type) => {
         label.innerText = '👉 Drag Away';
         popup.appendChild(label);
         let startX, startY, dragging = false;
+
         const down = (e) => {
             dragging = true;
             const pt = e.touches ? e.touches[0] : e;
             startX = pt.clientX; startY = pt.clientY;
             popup.style.zIndex = 10000;
+            popup.style.transition = 'none'; // Clear transition for direct control
         };
+
         const move = (e) => {
             if (!dragging) return;
-            e.preventDefault();
+            e.preventDefault(); // Prevent scroll
             const pt = e.touches ? e.touches[0] : e;
             const dx = pt.clientX - startX;
             const dy = pt.clientY - startY;
             popup.style.transform = `translate(${dx}px, ${dy}px)`;
+
+            // Visual feedback
             if (Math.hypot(dx, dy) > 250) {
-                dragging = false;
-                dismissPopup(popup);
+                popup.style.opacity = 0.5;
+                label.innerText = 'Release!';
             }
         };
-        const up = () => {
+
+        const up = (e) => {
+            if (!dragging) return; // Fix: only run if we were dragging
             dragging = false;
-            popup.style.transform = '';
+            const pt = e.changedTouches ? e.changedTouches[0] : e;
+            const dx = pt.clientX - startX;
+            const dy = pt.clientY - startY;
+
+            if (Math.hypot(dx, dy) > 250) {
+                dismissPopup(popup);
+            } else {
+                // Snap back
+                popup.style.transition = 'transform 0.3s ease';
+                popup.style.transform = 'translate(0, 0)';
+                popup.style.opacity = 1;
+                label.innerText = '👉 Drag Away';
+            }
             popup.style.zIndex = '';
         };
+
         popup.addEventListener('mousedown', down);
         popup.addEventListener('touchstart', down, { passive: false });
         document.addEventListener('mousemove', move);
         document.addEventListener('touchmove', move, { passive: false });
         document.addEventListener('mouseup', up);
         document.addEventListener('touchend', up);
+
         popup._cleanup = () => {
             document.removeEventListener('mousemove', move);
             document.removeEventListener('touchmove', move);
@@ -320,7 +364,7 @@ function spawnPopup() {
     if (!hypnoActive || !activeContainer) return;
 
     const allImages = Gallery.getAll();
-    if (allImages.length === 0) return;
+    if (!allImages || allImages.length === 0) return;
 
     // Prune if too many
     if (activePopups.size >= MAX_POPUPS) {
@@ -341,6 +385,7 @@ function spawnPopup() {
     const img = document.createElement('img');
     img.src = Gallery.getImageURL(randImg, 400);
     img.draggable = false;
+    img.style.pointerEvents = 'none';
     popup.appendChild(img);
 
     const isGame = Math.random() < 0.05; // 5% chance of game
@@ -350,13 +395,14 @@ function spawnPopup() {
     const y = Math.random() * (window.innerHeight - size);
 
     if (!isGame) {
+        // FLEET
         popup.classList.add('hypno-fleet');
         popup.style.cssText = `
             left: ${x}px; top: ${y}px;
             width: ${size}px; height: ${size}px;
             opacity: 0;
             transform: scale(${0.5 + Math.random()}) rotate(${Math.random() * 60 - 30}deg);
-            pointer-events: none;
+            pointer-events: none !important;
             transition: opacity 0.5s ease;
             z-index: ${100 + Math.floor(Math.random() * 100)};
             filter: grayscale(${Math.random()}) contrast(1.2) opacity(0.7);
@@ -372,12 +418,16 @@ function spawnPopup() {
             }, 800 + Math.random() * 1500);
         });
     } else {
+        // GAME
         popup.classList.add('hypno-game');
         popup.style.cssText = `
             left: ${x}px; top: ${y}px;
             width: ${size}px; height: ${size}px;
             animation: hypnoAppearSoft 0.4s ease-out forwards;
-            z-index: 999;
+            z-index: 10001; 
+            pointer-events: auto !important; 
+            cursor: pointer;
+            touch-action: none; /* CRITICAL: Prevent scrolling on game */
         `;
         runGame(popup, img, Math.floor(Math.random() * 4));
     }
