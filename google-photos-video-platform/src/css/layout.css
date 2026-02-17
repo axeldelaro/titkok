@@ -1502,7 +1502,7 @@
     transition: transform 0.5s;
 }
 
-/* 14. Video Ghost Delay */
+/* 14. Video Ghost Delay (Intense) */
 .hypno-ghost-video {
     position: absolute;
     top: 0;
@@ -1511,11 +1511,25 @@
     height: 100%;
     pointer-events: none;
     z-index: 5;
-    opacity: 0.6;
-    mix-blend-mode: screen;
-    /* Or difference for crazier effect */
-    filter: blur(2px) contrast(1.5);
-    transform: scale(1.05);
-    /* Slight zoom for separation */
+    opacity: 0.8;
+    mix-blend-mode: exclusion;
+    /* Trippy inversion */
+    filter: blur(2px) contrast(2);
+    transform: scale(1.1) translateX(-5px);
+    transition: opacity 1s ease;
+}
+
+.hypno-ghost-video-2 {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 4;
+    opacity: 0.5;
+    mix-blend-mode: difference;
+    filter: blur(4px) hue-rotate(90deg);
+    transform: scale(1.2) translateX(5px);
     transition: opacity 1s ease;
 }

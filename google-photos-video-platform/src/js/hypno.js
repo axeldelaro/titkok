@@ -169,33 +169,49 @@ const ChaosEngine = {
         videos.forEach(original => {
             if (original.dataset.hasGhost) return; // Prevent stacking
 
-            const ghost = original.cloneNode(true);
-            ghost.className = 'hypno-ghost-video';
-            ghost.muted = true;
-            ghost.removeAttribute('controls'); // Ensure clean look
-            ghost.dataset.isGhost = "true";
+            // Ghost 1 (0.4s delay, Exclusion)
+            const ghost1 = original.cloneNode(true);
+            ghost1.className = 'hypno-ghost-video';
+            ghost1.muted = true;
+            ghost1.removeAttribute('controls');
+            ghost1.dataset.isGhost = "true";
 
-            // Sync time with delay
-            const delay = 0.4; // 400ms delay
-            ghost.currentTime = Math.max(0, original.currentTime - delay);
-            ghost.playbackRate = original.playbackRate;
+            // Ghost 2 (0.8s delay, Difference)
+            const ghost2 = original.cloneNode(true);
+            ghost2.className = 'hypno-ghost-video-2';
+            ghost2.muted = true;
+            ghost2.removeAttribute('controls');
+            ghost2.dataset.isGhost = "true";
+
+            // Sync time
+            ghost1.currentTime = Math.max(0, original.currentTime - 0.4);
+            ghost2.currentTime = Math.max(0, original.currentTime - 0.8);
+            ghost1.playbackRate = original.playbackRate;
+            ghost2.playbackRate = original.playbackRate;
 
             if (original.parentNode) {
                 // Ensure parent is relative for absolute positioning
                 const parentStyle = window.getComputedStyle(original.parentNode);
                 if (parentStyle.position === 'static') original.parentNode.style.position = 'relative';
 
-                original.parentNode.appendChild(ghost);
+                original.parentNode.appendChild(ghost1);
+                original.parentNode.appendChild(ghost2);
                 original.dataset.hasGhost = "true";
 
-                ghost.play().catch(() => { }); // Ignore play errors
+                ghost1.play().catch(() => { });
+                ghost2.play().catch(() => { });
 
                 // Remove after random duration
+                const duration = 2000 + Math.random() * 3000;
                 setTimeout(() => {
-                    ghost.style.opacity = 0;
+                    ghost1.style.opacity = 0;
+                    ghost2.style.opacity = 0;
                     delete original.dataset.hasGhost;
-                    setTimeout(() => ghost.remove(), 1000);
-                }, 2000 + Math.random() * 3000);
+                    setTimeout(() => {
+                        ghost1.remove();
+                        ghost2.remove();
+                    }, 1000);
+                }, duration);
             }
         });
     }
@@ -445,7 +461,11 @@ function spawnPopup() {
     if (!hypnoActive || !activeContainer) return;
 
     const allImages = Gallery.getAll();
-    if (!allImages || allImages.length === 0) return;
+    // Fix: If no images, don't die. Wait and retry.
+    if (!allImages || allImages.length === 0) {
+        scheduleSpawn(1000);
+        return;
+    }
 
     // Prune if too many
     if (activePopups.size >= MAX_POPUPS) {
@@ -455,7 +475,7 @@ function spawnPopup() {
             first.remove();
             activePopups.delete(first);
         } else {
-            return;
+            // If first is game, try next time or just add anyway
         }
     }
 
