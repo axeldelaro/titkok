@@ -1,7 +1,7 @@
 /* ── Hypnotic Popup: SUBLIMINAL MODE ──
  * 95% Ghostly fleeting images (visual only)
  * 5% Mini-games (interactive)
- * High frequency, overlapping, subliminal feel.
+ * + 10 Chaos Effects (Text, Glitch, Spiral, etc.)
  */
 import Gallery from './gallery.js';
 import { Toast } from '../components/toast.js';
@@ -10,13 +10,143 @@ let hypnoActive = false;
 let hypnoTimers = [];
 let activePopups = new Set();
 let activeContainer = null;
-const MAX_POPUPS = 25; // Increased limit for subliminal flooding
+const MAX_POPUPS = 25;
 
-// ── Mini-Game Utils ──
+// ── Chaos Engine ──
+const WORDS = ["OBEY", "CONSUME", "WATCH", "SUBMIT", "SCROLL", "SLEEP", "AWAKE", "NO THOUGHT", "TITKOK", "LOOK"];
+let chaosTimers = [];
+
+const ChaosEngine = {
+    start(container) {
+        // 1. Cursor Ghost
+        document.addEventListener('mousemove', this.onMove);
+        document.addEventListener('touchmove', this.onMove);
+
+        // Ensure container allows clicks through to underlying elements where empty
+        // But children (popups) will have their own pointer-events
+
+        // 2. Spiral & Vignette & Static (Append layers)
+        this.addLayer(container, 'hypno-spiral');
+        this.addLayer(container, 'hypno-vignette');
+        this.addLayer(container, 'hypno-static');
+
+        // Start random loops
+        this.scheduleEffect();
+    },
+
+    stop(container) {
+        document.removeEventListener('mousemove', this.onMove);
+        document.removeEventListener('touchmove', this.onMove);
+        chaosTimers.forEach(t => clearTimeout(t));
+        chaosTimers = [];
+
+        // Clean layers & classes
+        const layers = container.querySelectorAll('.hypno-spiral, .hypno-vignette, .hypno-static, .hypno-subliminal-text');
+        layers.forEach(el => el.remove());
+        document.body.classList.remove('hypno-breathe', 'hypno-glitch', 'hypno-hue-shift', 'hypno-mirror-x', 'hypno-mirror-y');
+    },
+
+    addLayer(container, className) {
+        if (!container.querySelector(`.${className}`)) {
+            const el = document.createElement('div');
+            el.className = className;
+            // CRITICAL: Ensure overlays never block clicks
+            el.style.pointerEvents = 'none';
+            container.appendChild(el);
+            // Randomly activate
+            return el;
+        }
+        return container.querySelector(`.${className}`);
+    },
+
+    onMove(e) {
+        if (Math.random() > 0.3) return; // Throttling
+        const pt = e.touches ? e.touches[0] : e;
+        const ghost = document.createElement('div');
+        ghost.className = 'hypno-cursor-ghost';
+        ghost.style.left = pt.clientX + 'px';
+        ghost.style.top = pt.clientY + 'px';
+        ghost.style.pointerEvents = 'none'; // CRITICAL
+        document.body.appendChild(ghost);
+        setTimeout(() => ghost.remove(), 500);
+    },
+
+    scheduleEffect() {
+        if (!hypnoActive) return;
+        const delay = 500 + Math.random() * 2000;
+        const id = setTimeout(() => {
+            this.triggerRandomEffect();
+            this.scheduleEffect();
+        }, delay);
+        chaosTimers.push(id);
+    },
+
+    triggerRandomEffect() {
+        if (!activeContainer) return;
+        const roll = Math.random();
+
+        // 3. Subliminal Text (20% chance)
+        if (roll < 0.2) {
+            const word = WORDS[Math.floor(Math.random() * WORDS.length)];
+            const el = document.createElement('div');
+            el.className = 'hypno-subliminal-text';
+            el.innerText = word;
+            el.style.pointerEvents = 'none'; // CRITICAL
+            activeContainer.appendChild(el);
+            setTimeout(() => el.remove(), 200);
+        }
+
+        // 4. Flash Bang (5% chance)
+        else if (roll < 0.25) {
+            const el = document.createElement('div');
+            el.className = 'hypno-flash-white';
+            el.style.pointerEvents = 'none'; // CRITICAL
+            document.body.appendChild(el);
+            setTimeout(() => el.remove(), 100);
+        }
+
+        // 5. Glitch (10% chance)
+        else if (roll < 0.35) {
+            document.body.classList.add('hypno-glitch');
+            setTimeout(() => document.body.classList.remove('hypno-glitch'), 200 + Math.random() * 400);
+        }
+
+        // 6. Mirror Mode (10% chance)
+        else if (roll < 0.45) {
+            const cls = Math.random() > 0.5 ? 'hypno-mirror-x' : 'hypno-mirror-y';
+            document.body.classList.add(cls);
+            setTimeout(() => document.body.classList.remove(cls), 3000);
+        }
+
+        // 7. Toggle Layers (Spiral/Vignette/Static)
+        else if (roll < 0.7) {
+            const spiral = activeContainer.querySelector('.hypno-spiral');
+            if (spiral) spiral.classList.toggle('active', Math.random() > 0.3);
+
+            const vignette = activeContainer.querySelector('.hypno-vignette');
+            if (vignette) vignette.classList.toggle('active', Math.random() > 0.4);
+
+            const stat = activeContainer.querySelector('.hypno-static');
+            if (stat) stat.classList.toggle('active', Math.random() > 0.6);
+        }
+
+        // 8. Breathe & Hue (Persistent toggles)
+        else {
+            document.body.classList.toggle('hypno-breathe', Math.random() > 0.3);
+            document.body.classList.toggle('hypno-hue-shift', Math.random() > 0.7);
+        }
+    }
+};
+
+// ── Utils ──
 const stop = () => {
     hypnoActive = false;
     hypnoTimers.forEach(id => clearTimeout(id));
     hypnoTimers = [];
+
+    // Stop Chaos
+    ChaosEngine.stop(activeContainer);
+
     if (activeContainer) {
         activeContainer.querySelectorAll('.hypno-popup').forEach(el => {
             if (el._cleanup) el._cleanup();
@@ -36,7 +166,6 @@ const dismissPopup = (popup, isGame = true) => {
         popup.classList.add('hypno-solved');
         setTimeout(() => popup.remove(), 600);
     } else {
-        // Fleets just fade out naturally or removed
         popup.remove();
     }
 };
@@ -47,17 +176,15 @@ const scheduleSpawn = (delay) => {
     hypnoTimers.push(id);
 };
 
-// ── MINI-GAMES (Rare 5%) ──
-// ... (Keeping the same game logic, just creating helper functions)
-
+// ── MINI-GAMES ──
 const runGame = (popup, img, type) => {
-    // 1. TAP (30-50)
+    // 1. TAP (20-40)
     if (type === 0) {
-        const needed = 20 + Math.floor(Math.random() * 20);
+        const needed = 20 + Math.floor(Math.random() * 21);
         let taps = 0;
         const counter = document.createElement('div');
         counter.className = 'hypno-counter';
-        counter.textContent = `👆 0/${needed}`;
+        counter.innerText = `👆 0/${needed}`;
         popup.appendChild(counter);
         const bar = document.createElement('div');
         bar.className = 'hypno-progress-bar';
@@ -70,8 +197,8 @@ const runGame = (popup, img, type) => {
             e.preventDefault(); e.stopPropagation();
             taps++;
             fill.style.width = Math.min(100, (taps / needed) * 100) + '%';
-            counter.textContent = `👆 ${taps}/${needed}`;
-            popup.style.transform = `translate(${Math.random() * 10 - 5}px, ${Math.random() * 10 - 5}px) scale(${1 + Math.random() * 0.1})`;
+            counter.innerText = `👆 ${taps}/${needed}`;
+            popup.style.transform = `scale(${1 + Math.random() * 0.1})`;
             if (taps >= needed) dismissPopup(popup);
         };
         popup.addEventListener('click', onTap);
@@ -82,7 +209,7 @@ const runGame = (popup, img, type) => {
         img.style.filter = 'blur(20px) brightness(0.4)';
         const label = document.createElement('div');
         label.className = 'hypno-counter';
-        label.textContent = '✋ Hold 4s';
+        label.innerText = '✋ Hold 4s';
         popup.appendChild(label);
         const bar = document.createElement('div');
         bar.className = 'hypno-progress-bar';
@@ -115,13 +242,13 @@ const runGame = (popup, img, type) => {
         popup.addEventListener('touchend', end);
         popup._cleanup = () => clearInterval(holdInterval);
     }
-    // 3. CATCH (8x)
+    // 3. CATCH (6x)
     else if (type === 2) {
         let catches = 0;
         const needed = 6;
         const label = document.createElement('div');
         label.className = 'hypno-counter';
-        label.textContent = `🎯 0/${needed}`;
+        label.innerText = `🎯 0/${needed}`;
         popup.appendChild(label);
         let canDodge = true;
         const dodge = () => {
@@ -134,9 +261,9 @@ const runGame = (popup, img, type) => {
         popup.addEventListener('mousedown', (e) => {
             e.preventDefault(); e.stopPropagation();
             catches++;
-            label.textContent = `🎯 ${catches}/${needed}`;
+            label.innerText = `🎯 ${catches}/${needed}`;
             canDodge = false;
-            popup.style.transform = 'scale(0.9)';
+            popup.style.transform = 'scale(0.95)';
             setTimeout(() => {
                 if (catches >= needed) dismissPopup(popup);
                 else { canDodge = true; popup.style.transform = ''; dodge(); }
@@ -147,7 +274,7 @@ const runGame = (popup, img, type) => {
     else {
         const label = document.createElement('div');
         label.className = 'hypno-counter';
-        label.textContent = '👉 Drag Away';
+        label.innerText = '👉 Drag Away';
         popup.appendChild(label);
         let startX, startY, dragging = false;
         const down = (e) => {
@@ -195,7 +322,7 @@ function spawnPopup() {
     const allImages = Gallery.getAll();
     if (allImages.length === 0) return;
 
-    // Prune if too many (mostly remove old fleets)
+    // Prune if too many
     if (activePopups.size >= MAX_POPUPS) {
         const it = activePopups.values();
         const first = it.next().value;
@@ -203,7 +330,7 @@ function spawnPopup() {
             first.remove();
             activePopups.delete(first);
         } else {
-            return; // Wait if only games are left (unlikely)
+            return;
         }
     }
 
@@ -216,14 +343,12 @@ function spawnPopup() {
     img.draggable = false;
     popup.appendChild(img);
 
-    // 5% chance of Mini-Game vs 95% Ghostly Fleet
-    const isGame = Math.random() < 0.05;
+    const isGame = Math.random() < 0.05; // 5% chance of game
 
     const size = isGame ? (150 + Math.random() * 100) : (100 + Math.random() * 250);
     const x = Math.random() * (window.innerWidth - size);
     const y = Math.random() * (window.innerHeight - size);
 
-    // Subliminal / Fleet Style
     if (!isGame) {
         popup.classList.add('hypno-fleet');
         popup.style.cssText = `
@@ -231,24 +356,22 @@ function spawnPopup() {
             width: ${size}px; height: ${size}px;
             opacity: 0;
             transform: scale(${0.5 + Math.random()}) rotate(${Math.random() * 60 - 30}deg);
-            pointer-events: none; /* CLICK-THROUGH */
+            pointer-events: none;
             transition: opacity 0.5s ease;
             z-index: ${100 + Math.floor(Math.random() * 100)};
             filter: grayscale(${Math.random()}) contrast(1.2) opacity(0.7);
         `;
-        // Animate visually
         requestAnimationFrame(() => {
-            popup.style.opacity = 0.4 + Math.random() * 0.4; // Semi-transparent
+            popup.style.opacity = 0.3 + Math.random() * 0.5;
             setTimeout(() => {
                 popup.style.opacity = 0;
                 setTimeout(() => {
                     if (popup.parentNode) popup.remove();
                     activePopups.delete(popup);
                 }, 1000);
-            }, 800 + Math.random() * 1500); // Disappear after 0.8-2.3s
+            }, 800 + Math.random() * 1500);
         });
     } else {
-        // Game Style (Interactive)
         popup.classList.add('hypno-game');
         popup.style.cssText = `
             left: ${x}px; top: ${y}px;
@@ -256,15 +379,13 @@ function spawnPopup() {
             animation: hypnoAppearSoft 0.4s ease-out forwards;
             z-index: 999;
         `;
-        // Attach random game
         runGame(popup, img, Math.floor(Math.random() * 4));
     }
 
     activeContainer.appendChild(popup);
     activePopups.add(popup);
 
-    // Rapid fire schedule
-    scheduleSpawn(100 + Math.random() * 400); // 0.1s - 0.5s interval
+    scheduleSpawn(100 + Math.random() * 400);
 }
 
 const HypnoPopups = {
@@ -278,12 +399,13 @@ const HypnoPopups = {
             e.stopPropagation();
             if (hypnoActive) {
                 stop();
-                Toast.show('Hypnotic mode off');
+                Toast.show('Awake.');
             } else {
                 hypnoActive = true;
                 btn.classList.add('active');
-                Toast.show('🌀 SUBLIMINAL MODE', 'info');
+                Toast.show('🌀 SUBLIMINAL MODE START', 'info');
                 scheduleSpawn(200);
+                ChaosEngine.start(container); // Start the effects
             }
         };
         container.appendChild(btn);

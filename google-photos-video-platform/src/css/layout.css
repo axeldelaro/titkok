@@ -1226,3 +1226,231 @@
         background: rgba(200, 50, 255, 0.35);
     }
 }
+
+/* ── 10 NEW HYPNOTIC EFFECTS ── */
+
+/* 1. Subliminal Text */
+.hypno-subliminal-text {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 8rem;
+    font-weight: 900;
+    color: rgba(255, 255, 255, 0.08);
+    /* Barely visible */
+    pointer-events: none;
+    z-index: 50;
+    text-transform: uppercase;
+    letter-spacing: 10px;
+    opacity: 0;
+    animation: subliminalFlash 0.15s linear;
+}
+
+@keyframes subliminalFlash {
+    0% {
+        opacity: 0;
+    }
+
+    50% {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1.2);
+    }
+
+    100% {
+        opacity: 0;
+    }
+}
+
+/* 2. Breathing Screen */
+.hypno-breathe {
+    animation: hypnoBreathe 4s ease-in-out infinite;
+}
+
+@keyframes hypnoBreathe {
+
+    0%,
+    100% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.02);
+    }
+}
+
+/* 3. Glitch Effect */
+.hypno-glitch {
+    animation: hypnoGlitch 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94) both infinite;
+}
+
+@keyframes hypnoGlitch {
+    0% {
+        transform: translate(0);
+    }
+
+    20% {
+        transform: translate(-2px, 2px);
+    }
+
+    40% {
+        transform: translate(-2px, -2px);
+    }
+
+    60% {
+        transform: translate(2px, 2px);
+    }
+
+    80% {
+        transform: translate(2px, -2px);
+    }
+
+    100% {
+        transform: translate(0);
+    }
+}
+
+/* 4. Spiral Overlay */
+.hypno-spiral {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    width: 200vmax;
+    height: 200vmax;
+    background: repeating-conic-gradient(from 0deg, rgba(255, 255, 255, 0.03) 0deg 10deg, transparent 10deg 20deg);
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    z-index: 2;
+    border-radius: 50%;
+    animation: hypnoSpinSlow 20s linear infinite;
+    opacity: 0;
+    transition: opacity 1s ease;
+}
+
+.hypno-spiral.active {
+    opacity: 1;
+}
+
+@keyframes hypnoSpinSlow {
+    from {
+        transform: translate(-50%, -50%) rotate(0deg);
+    }
+
+    to {
+        transform: translate(-50%, -50%) rotate(360deg);
+    }
+}
+
+/* 5. Vignette Pulse */
+.hypno-vignette {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: radial-gradient(circle, transparent 50%, black 150%);
+    pointer-events: none;
+    z-index: 100;
+    opacity: 0;
+    transition: opacity 0.5s;
+    animation: hypnoVignettePulse 2s ease-in-out infinite;
+}
+
+.hypno-vignette.active {
+    opacity: 0.6;
+}
+
+@keyframes hypnoVignettePulse {
+
+    0%,
+    100% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.1);
+    }
+}
+
+/* 6. Cursor Ghost */
+.hypno-cursor-ghost {
+    position: fixed;
+    width: 20px;
+    height: 20px;
+    background: rgba(200, 100, 255, 0.5);
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 2000;
+    animation: ghostFade 0.5s linear forwards;
+}
+
+@keyframes ghostFade {
+    to {
+        opacity: 0;
+        transform: scale(0.2);
+    }
+}
+
+/* 7. Mirror Mode */
+.hypno-mirror-x {
+    transform: scaleX(-1);
+}
+
+.hypno-mirror-y {
+    transform: scaleY(-1);
+}
+
+/* 8. Visual Static */
+.hypno-static {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.05'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 90;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.hypno-static.active {
+    opacity: 1;
+}
+
+/* 9. Flash Bang */
+.hypno-flash-white {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: white;
+    z-index: 9999;
+    animation: flashAnim 0.1s ease-out forwards;
+}
+
+@keyframes flashAnim {
+    0% {
+        opacity: 0.8;
+    }
+
+    100% {
+        opacity: 0;
+    }
+}
+
+/* 10. Hue Shift */
+.hypno-hue-shift {
+    animation: hueShift 10s linear infinite;
+}
+
+@keyframes hueShift {
+    0% {
+        filter: hue-rotate(0deg);
+    }
+
+    100% {
+        filter: hue-rotate(360deg);
+    }
+}
