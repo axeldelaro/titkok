@@ -1064,63 +1064,106 @@
 .hypno-popup {
     position: fixed;
     z-index: 999;
-    pointer-events: none;
-    border-radius: 16px;
-    overflow: hidden;
+    pointer-events: auto;
+    border-radius: 14px;
+    overflow: visible;
     box-shadow:
-        0 0 30px rgba(200, 50, 255, 0.4),
-        0 0 60px rgba(100, 50, 255, 0.2),
-        inset 0 0 20px rgba(255, 255, 255, 0.1);
-    border: 2px solid rgba(200, 150, 255, 0.3);
+        0 4px 20px rgba(200, 50, 255, 0.3),
+        0 0 40px rgba(100, 50, 255, 0.15);
+    border: 2px solid rgba(200, 150, 255, 0.4);
+    user-select: none;
 }
 
 .hypno-popup img {
     width: 100%;
     height: 100%;
     object-fit: cover;
-    filter: saturate(1.3) contrast(1.1);
+    border-radius: 12px;
+    pointer-events: none;
+    transition: filter 0.3s ease;
 }
 
-@keyframes hypnoAppear {
+/* Counter / instruction badge */
+.hypno-counter {
+    position: absolute;
+    bottom: -12px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(120, 40, 200, 0.9);
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 10px;
+    white-space: nowrap;
+    box-shadow: 0 2px 10px rgba(120, 40, 200, 0.4);
+    z-index: 10;
+    pointer-events: none;
+}
+
+/* Soft appear */
+@keyframes hypnoAppearSoft {
     0% {
         opacity: 0;
-        transform: scale(0.3) rotate(calc(var(--rotate) - 20deg));
-        filter: blur(20px) brightness(2);
+        transform: scale(0.6);
     }
 
-    20% {
+    100% {
         opacity: 1;
-        transform: scale(var(--scale)) rotate(var(--rotate));
-        filter: blur(0px) brightness(1.1);
-    }
-
-    70% {
-        opacity: 0.9;
-        transform: scale(calc(var(--scale) * 1.05)) rotate(calc(var(--rotate) + 5deg));
-        filter: blur(0px) brightness(1);
-    }
-
-    100% {
-        opacity: 0;
-        transform: scale(calc(var(--scale) * 0.8)) rotate(calc(var(--rotate) + 15deg));
-        filter: blur(10px) brightness(0.5);
+        transform: scale(1);
     }
 }
 
-.hypno-fade-out {
-    animation: hypnoFadeOut 0.6s ease-in forwards !important;
+/* Solved — pop out with glow */
+.hypno-solved {
+    animation: hypnoSolved 0.8s ease forwards !important;
+    pointer-events: none !important;
 }
 
-@keyframes hypnoFadeOut {
+@keyframes hypnoSolved {
     0% {
-        opacity: 0.9;
-        transform: scale(var(--scale));
-        filter: blur(0px);
+        opacity: 1;
+        transform: scale(1);
+    }
+
+    30% {
+        opacity: 1;
+        transform: scale(1.15);
+        box-shadow: 0 0 40px rgba(100, 255, 100, 0.6);
+        border-color: rgba(100, 255, 100, 0.6);
     }
 
     100% {
         opacity: 0;
-        transform: scale(0.2) rotate(calc(var(--rotate) + 90deg));
-        filter: blur(30px);
+        transform: scale(0.3);
+        filter: blur(5px);
+    }
+}
+
+/* Shake feedback for tap games */
+@keyframes hypnoShake {
+
+    0%,
+    100% {
+        transform: translateX(0);
+    }
+
+    25% {
+        transform: translateX(-6px) rotate(-2deg);
+    }
+
+    75% {
+        transform: translateX(6px) rotate(2deg);
+    }
+}
+
+/* Spin for double-tap */
+@keyframes hypnoSpin {
+    0% {
+        transform: rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(360deg);
     }
 }
