@@ -1167,3 +1167,62 @@
         transform: rotate(360deg);
     }
 }
+
+/* Progress bar for hold / swipe games */
+.hypno-progress-bar {
+    position: absolute;
+    top: -6px;
+    left: 10%;
+    width: 80%;
+    height: 5px;
+    background: rgba(0, 0, 0, 0.4);
+    border-radius: 3px;
+    overflow: hidden;
+    z-index: 10;
+    pointer-events: none;
+}
+
+.hypno-progress-fill {
+    height: 100%;
+    width: 0%;
+    border-radius: 3px;
+    transition: width 0.1s ease;
+}
+
+.hypno-progress-fill.hold-fill {
+    background: linear-gradient(90deg, #9b59b6, #e74c3c);
+}
+
+.hypno-progress-fill.swipe-fill {
+    background: linear-gradient(90deg, #2ecc71, #27ae60);
+}
+
+.hypno-progress-fill:not(.hold-fill):not(.swipe-fill) {
+    background: linear-gradient(90deg, #8e44ad, #3498db);
+}
+
+/* Tap zones for pattern game */
+.hypno-tap-zone {
+    opacity: 0;
+    transition: opacity 0.2s ease, background 0.2s ease;
+    border-radius: 6px;
+}
+
+.hypno-zone-active {
+    opacity: 1;
+    background: rgba(200, 50, 255, 0.25);
+    border: 2px dashed rgba(200, 150, 255, 0.6);
+    animation: hypnoZonePulse 1s ease-in-out infinite;
+}
+
+@keyframes hypnoZonePulse {
+
+    0%,
+    100% {
+        background: rgba(200, 50, 255, 0.15);
+    }
+
+    50% {
+        background: rgba(200, 50, 255, 0.35);
+    }
+}
