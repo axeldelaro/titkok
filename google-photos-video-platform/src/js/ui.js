@@ -160,7 +160,6 @@ const UI = {
 
         // Initialize features
         Likes.init();
-        Playlist.init();
         Gallery.init();
     },
 
