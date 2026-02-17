@@ -1017,3 +1017,110 @@
 .gallery-img-landscape {
     width: 100%;
 }
+
+/* ── Hypnotic Popup System ── */
+.hypno-toggle-btn {
+    position: fixed;
+    bottom: 100px;
+    right: 20px;
+    z-index: 1001;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(120, 50, 200, 0.7);
+    backdrop-filter: blur(10px);
+    font-size: 1.6rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(120, 50, 200, 0.3);
+}
+
+.hypno-toggle-btn:hover {
+    transform: scale(1.15) rotate(15deg);
+    background: rgba(150, 70, 230, 0.9);
+}
+
+.hypno-toggle-btn.active {
+    background: rgba(200, 50, 255, 0.9);
+    box-shadow: 0 0 25px rgba(200, 50, 255, 0.6), 0 0 60px rgba(200, 50, 255, 0.3);
+    animation: hypnoBtnPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes hypnoBtnPulse {
+
+    0%,
+    100% {
+        transform: scale(1);
+        box-shadow: 0 0 25px rgba(200, 50, 255, 0.6);
+    }
+
+    50% {
+        transform: scale(1.1) rotate(10deg);
+        box-shadow: 0 0 40px rgba(200, 50, 255, 0.8), 0 0 80px rgba(200, 50, 255, 0.4);
+    }
+}
+
+.hypno-popup {
+    position: fixed;
+    z-index: 999;
+    pointer-events: none;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow:
+        0 0 30px rgba(200, 50, 255, 0.4),
+        0 0 60px rgba(100, 50, 255, 0.2),
+        inset 0 0 20px rgba(255, 255, 255, 0.1);
+    border: 2px solid rgba(200, 150, 255, 0.3);
+}
+
+.hypno-popup img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    filter: saturate(1.3) contrast(1.1);
+}
+
+@keyframes hypnoAppear {
+    0% {
+        opacity: 0;
+        transform: scale(0.3) rotate(calc(var(--rotate) - 20deg));
+        filter: blur(20px) brightness(2);
+    }
+
+    20% {
+        opacity: 1;
+        transform: scale(var(--scale)) rotate(var(--rotate));
+        filter: blur(0px) brightness(1.1);
+    }
+
+    70% {
+        opacity: 0.9;
+        transform: scale(calc(var(--scale) * 1.05)) rotate(calc(var(--rotate) + 5deg));
+        filter: blur(0px) brightness(1);
+    }
+
+    100% {
+        opacity: 0;
+        transform: scale(calc(var(--scale) * 0.8)) rotate(calc(var(--rotate) + 15deg));
+        filter: blur(10px) brightness(0.5);
+    }
+}
+
+.hypno-fade-out {
+    animation: hypnoFadeOut 0.6s ease-in forwards !important;
+}
+
+@keyframes hypnoFadeOut {
+    0% {
+        opacity: 0.9;
+        transform: scale(var(--scale));
+        filter: blur(0px);
+    }
+
+    100% {
+        opacity: 0;
+        transform: scale(0.2) rotate(calc(var(--rotate) + 90deg));
+        filter: blur(30px);
+    }
+}

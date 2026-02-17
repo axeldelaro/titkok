@@ -8,7 +8,6 @@ import Navbar from '../components/navbar.js';
 import Sidebar from '../components/sidebar.js';
 import Player from './player.js';
 import Likes from './likes.js';
-import Playlist from './playlist.js';
 import Gallery from './gallery.js';
 // PendingUploads removed — simple upload flow
 import { Toast } from '../components/toast.js';
@@ -196,10 +195,8 @@ const UI = {
             case 'likes':
                 UI.renderLikes(content);
                 break;
-            case 'playlist':
-                const pid = route.params.get('id');
-                if (pid) UI.renderPlaylistDetail(content, pid);
-                else UI.renderPlaylists(content);
+            case 'mix':
+                UI.renderMix(content);
                 break;
             case 'gallery':
                 UI.renderGallery(content);
@@ -519,145 +516,284 @@ const UI = {
         container.appendChild(grid);
     },
 
-    renderPlaylists: (container) => {
-        const playlists = Store.get('playlists') || [];
+    renderMix: async (container) => {
+        container.className = 'content feed-container';
+        container.innerHTML = '';
 
-        container.innerHTML = `
-            <div class="section-header">
-                <h2>📂 Your Playlists</h2>
-                <button id="create-playlist-btn" class="btn-primary btn-with-icon">
-                    <span>➕</span> New Playlist
-                </button>
-            </div>
-        `;
-
-        // Create playlist button
-        container.querySelector('#create-playlist-btn').onclick = () => {
-            UI.showCreatePlaylistModal();
-        };
-
-        if (playlists.length === 0) {
-            const emptyState = document.createElement('div');
-            emptyState.className = 'empty-state';
-            emptyState.innerHTML = `
-                <span class="empty-state-icon">📁</span>
-                <h2>No Playlists Yet</h2>
-                <p class="text-secondary">Create a playlist to organize your favorite videos.</p>
-            `;
-            container.appendChild(emptyState);
-            return;
+        // ── Load both videos and images ──
+        let videos = Store.get('videos') || [];
+        if (videos.length === 0) {
+            container.appendChild(Loader());
+            let nextPageToken = null;
+            let allVideos = [];
+            do {
+                const data = await API.searchVideos(nextPageToken);
+                if (data && data.mediaItems) {
+                    allVideos = allVideos.concat(data.mediaItems.filter(item => item.mediaMetadata && item.mediaMetadata.video));
+                }
+                nextPageToken = data ? data.nextPageToken : null;
+            } while (nextPageToken);
+            videos = allVideos;
+            Store.set('videos', videos);
+            container.innerHTML = '';
         }
 
-        const grid = document.createElement('div');
-        grid.className = 'playlist-grid';
+        // Wait for gallery images
+        if (Gallery.isLoading()) {
+            container.appendChild(Loader());
+            let waited = 0;
+            while (Gallery.isLoading() && waited < 20000) {
+                await new Promise(r => setTimeout(r, 500));
+                waited += 500;
+            }
+            container.innerHTML = '';
+        } else if (!Gallery.isLoaded() && Gallery.getAll().length === 0) {
+            container.appendChild(Loader());
+            await Gallery.fetchAllImages();
+            container.innerHTML = '';
+        }
+        const images = Gallery.getAll();
 
-        playlists.forEach(playlist => {
-            const card = document.createElement('div');
-            card.className = 'playlist-card';
+        // Filter hidden videos
+        const hiddenIds = Store.getHiddenIds();
+        if (hiddenIds.length > 0) {
+            videos = videos.filter(v => !hiddenIds.includes(v.id));
+        }
 
-            const firstVideoThumb = playlist.videos.length > 0
-                ? `${playlist.videos[0].baseUrl}=w400-h225-c`
-                : '';
+        // ── Merge and shuffle ──
+        const mixItems = [
+            ...videos.map(v => ({ type: 'video', data: v })),
+            ...images.map(img => ({ type: 'image', data: img }))
+        ];
 
-            card.innerHTML = `
-                <div class="playlist-card-thumb" style="${firstVideoThumb ? `background-image:url(${firstVideoThumb})` : ''}">
-                    <div class="playlist-card-count">
-                        <span>▶</span> ${playlist.videos.length} video${playlist.videos.length !== 1 ? 's' : ''}
-                    </div>
-                </div>
-                <div class="playlist-card-info">
-                    <h3>${playlist.name}</h3>
-                    <span class="text-secondary">${new Date(playlist.createdAt).toLocaleDateString()}</span>
-                </div>
-                <button class="playlist-delete-btn btn-icon" title="Delete playlist">🗑️</button>
-            `;
+        // Fisher-Yates shuffle
+        for (let i = mixItems.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [mixItems[i], mixItems[j]] = [mixItems[j], mixItems[i]];
+        }
 
-            // Navigate to playlist detail
-            card.querySelector('.playlist-card-thumb').onclick = () => {
-                Router.navigate(`/playlist?id=${playlist.id}`);
-            };
-            card.querySelector('.playlist-card-info').onclick = () => {
-                Router.navigate(`/playlist?id=${playlist.id}`);
-            };
-
-            // Delete playlist
-            card.querySelector('.playlist-delete-btn').onclick = (e) => {
-                e.stopPropagation();
-                if (confirm(`Delete playlist "${playlist.name}"?`)) {
-                    Playlist.delete(playlist.id);
-                    UI.renderPlaylists(container);
-                    Toast.show('Playlist deleted');
-                    // Update sidebar
-                    UI.updateSidebarPlaylists();
-                }
-            };
-
-            grid.appendChild(card);
-        });
-
-        container.appendChild(grid);
-    },
-
-    renderPlaylistDetail: (container, id) => {
-        const playlist = Playlist.get(id);
-
-        if (!playlist) {
+        if (mixItems.length === 0) {
+            container.className = 'content';
             container.innerHTML = `
                 <div class="empty-state">
-                    <span class="empty-state-icon">📁</span>
-                    <h2>Playlist Not Found</h2>
-                    <p class="text-secondary">This playlist may have been deleted.</p>
-                    <a href="#/playlist" class="btn-primary" style="display:inline-block;margin-top:1rem;">View All Playlists</a>
+                    <span class="empty-state-icon">🔀</span>
+                    <h2>No Media Yet</h2>
+                    <p class="text-secondary">Upload videos or images to see them here in a mixed feed.</p>
                 </div>`;
             return;
         }
 
-        container.innerHTML = `
-            <div class="section-header">
-                <div>
-                    <a href="#/playlist" class="text-secondary" style="font-size: 0.9rem;">← Back to Playlists</a>
-                    <h2 style="margin-top: 0.5rem;">${playlist.name}</h2>
-                    <span class="text-secondary">${playlist.videos.length} video${playlist.videos.length !== 1 ? 's' : ''} • Created ${new Date(playlist.createdAt).toLocaleDateString()}</span>
-                </div>
-            </div>
-        `;
+        // ── Floating buttons ──
+        const shuffleBtn = document.createElement('button');
+        shuffleBtn.className = 'feed-shuffle-btn';
+        shuffleBtn.innerHTML = '🔀';
+        shuffleBtn.title = 'Shuffle Mix';
+        shuffleBtn.onclick = () => {
+            UI.renderMix(container);
+            Toast.show('Mix shuffled! 🔀');
+        };
+        container.appendChild(shuffleBtn);
 
-        if (playlist.videos.length === 0) {
-            container.innerHTML += `
-                <div class="empty-state">
-                    <span class="empty-state-icon">📹</span>
-                    <h2>Empty Playlist</h2>
-                    <p class="text-secondary">Add videos to this playlist from any video page.</p>
-                </div>`;
-            return;
-        }
+        // Upload button
+        const uploadBtn = document.createElement('button');
+        uploadBtn.className = 'gallery-float-upload';
+        uploadBtn.innerHTML = '📤';
+        uploadBtn.title = 'Upload Media';
+        container.appendChild(uploadBtn);
 
-        const grid = document.createElement('div');
-        grid.className = 'video-grid';
+        const uploadInput = document.createElement('input');
+        uploadInput.type = 'file';
+        uploadInput.accept = 'image/*,video/*';
+        uploadInput.multiple = true;
+        uploadInput.style.display = 'none';
+        container.appendChild(uploadInput);
+        uploadBtn.onclick = () => uploadInput.click();
+        uploadInput.onchange = async (e) => {
+            const files = Array.from(e.target.files);
+            if (files.length === 0) return;
+            uploadInput.value = '';
 
-        playlist.videos.forEach(video => {
-            const cardWrapper = document.createElement('div');
-            cardWrapper.className = 'playlist-video-wrapper';
+            const imageFiles = files.filter(f => f.type.startsWith('image/'));
+            const videoFiles = files.filter(f => f.type.startsWith('video/'));
 
-            const card = VideoCard(video);
-            cardWrapper.appendChild(card);
+            // Handle images with instant preview
+            if (imageFiles.length > 0) {
+                Gallery.addLocalImages(imageFiles);
+                Toast.show(`${imageFiles.length} image${imageFiles.length > 1 ? 's' : ''} added! Uploading...`, 'info', 4000);
+                Gallery.uploadImages(imageFiles, {
+                    onFileStart: (file, idx) => Toast.show(`📤 Image ${idx + 1}/${imageFiles.length}: ${file.name}`, 'info', 2000),
+                    onFileComplete: () => { },
+                    onFileError: (file) => Toast.show(`❌ Failed: ${file.name}`, 'error')
+                }).then(() => {
+                    Toast.show('✅ Images uploaded!', 'success');
+                    setTimeout(() => {
+                        Gallery.removeLocalImages();
+                        Gallery.fetchAllImages();
+                    }, 8000);
+                });
+            }
 
-            // Remove from playlist button
-            const removeBtn = document.createElement('button');
-            removeBtn.className = 'btn-remove-from-playlist';
-            removeBtn.textContent = '✕ Remove';
-            removeBtn.onclick = (e) => {
-                e.stopPropagation();
-                Playlist.removeVideo(id, video.id);
-                Toast.show('Removed from playlist');
-                UI.renderPlaylistDetail(container, id);
-            };
-            cardWrapper.appendChild(removeBtn);
+            // Handle videos with instant preview
+            if (videoFiles.length > 0) {
+                const localVideos = videoFiles.map(file => ({
+                    id: `local_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+                    filename: file.name,
+                    baseUrl: URL.createObjectURL(file),
+                    _isLocal: true,
+                    mediaMetadata: { creationTime: new Date().toISOString(), video: {} }
+                }));
+                Store.set('videos', [...localVideos, ...Store.get('videos')]);
+                Toast.show(`${videoFiles.length} video${videoFiles.length > 1 ? 's' : ''} added! Uploading...`, 'info', 4000);
 
-            grid.appendChild(cardWrapper);
+                (async () => {
+                    let ok = 0;
+                    for (const file of videoFiles) {
+                        try {
+                            await API.uploadVideo(file);
+                            ok++;
+                        } catch (err) {
+                            Toast.show(`❌ Failed: ${file.name}`, 'error');
+                        }
+                    }
+                    if (ok > 0) {
+                        Toast.show(`✅ ${ok} video${ok > 1 ? 's' : ''} uploaded!`, 'success');
+                        setTimeout(() => {
+                            Store.set('videos', []);
+                            Store.set('nextPageToken', null);
+                        }, 10000);
+                    }
+                })();
+            }
+
+            // Re-render
+            UI.renderMix(container);
+        };
+
+        // Count badge
+        const countBadge = document.createElement('div');
+        countBadge.className = 'feed-count-badge';
+        countBadge.textContent = `${mixItems.length} items (${videos.length}🎬 ${images.length}🖼️)`;
+        container.appendChild(countBadge);
+
+        // ── TikTok feed ──
+        const feed = document.createElement('div');
+        feed.className = 'video-feed';
+
+        const isPortraitVideo = (video) => {
+            const meta = video.mediaMetadata || {};
+            let w = parseInt(meta.width) || 0;
+            let h = parseInt(meta.height) || 0;
+            if ((!w || !h) && meta.video) {
+                w = parseInt(meta.video.width) || w;
+                h = parseInt(meta.video.height) || h;
+            }
+            return h > w && w > 0;
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                // Video play/pause
+                const player = entry.target._player;
+                if (player) {
+                    if (entry.isIntersecting) player.activate();
+                    else player.deactivate();
+                }
+                // Update counter
+                if (entry.isIntersecting) {
+                    const idx = entry.target.dataset.mixIdx;
+                    if (idx) {
+                        countBadge.textContent = `${parseInt(idx) + 1} / ${mixItems.length}`;
+                    }
+                }
+            });
+        }, { root: null, threshold: 0.6 });
+
+        mixItems.forEach((item, i) => {
+            if (item.type === 'video') {
+                const video = item.data;
+                const card = document.createElement('div');
+                card.dataset.mixIdx = i;
+                const isPortrait = isPortraitVideo(video);
+                card.className = `video-card-feed${isPortrait ? ' portrait' : ''}`;
+
+                const playerContainer = document.createElement('div');
+                playerContainer.className = 'feed-player-container';
+                const player = new Player(playerContainer, video.baseUrl, video.baseUrl, { lazy: true, mediaItemId: video.id });
+                card._player = player;
+
+                if (!isPortrait && player.video) {
+                    player.video.addEventListener('loadedmetadata', () => {
+                        if (player.video.videoHeight > player.video.videoWidth) card.classList.add('portrait');
+                    });
+                }
+
+                const infoOverlay = document.createElement('div');
+                infoOverlay.className = 'feed-info-overlay';
+                infoOverlay.innerHTML = `<h3>🎬 ${video.filename}</h3>`;
+
+                const actions = document.createElement('div');
+                actions.className = 'feed-actions';
+                actions.innerHTML = `
+                    <button class="btn-icon like-btn" title="Like">${Likes.isLiked(video.id) ? '❤️' : '🤍'}</button>
+                    <button class="btn-icon share-btn" title="Copy Link">🔗</button>
+                `;
+                actions.querySelector('.like-btn').onclick = (e) => {
+                    e.stopPropagation();
+                    const isLiked = Likes.toggleLike(video);
+                    e.currentTarget.textContent = isLiked ? '❤️' : '🤍';
+                };
+                actions.querySelector('.share-btn').onclick = (e) => {
+                    e.stopPropagation();
+                    if (video._isLocal) { Toast.show('Link available after upload', 'info'); return; }
+                    navigator.clipboard.writeText(`${window.location.origin}/#/video?id=${video.id}`);
+                    Toast.show('Link copied!');
+                };
+
+                card.appendChild(playerContainer);
+                card.appendChild(infoOverlay);
+                card.appendChild(actions);
+                feed.appendChild(card);
+                observer.observe(card);
+
+            } else {
+                // Image card
+                const image = item.data;
+                const card = document.createElement('div');
+                card.className = 'video-card-feed gallery-card';
+                card.dataset.mixIdx = i;
+
+                const imgContainer = document.createElement('div');
+                imgContainer.className = 'gallery-img-container';
+
+                const img = document.createElement('img');
+                img.src = Gallery.getImageURL(image);
+                img.alt = image.filename || 'Image';
+                img.draggable = false;
+
+                const meta = image.mediaMetadata || {};
+                const w = parseInt(meta.width) || 0;
+                const h = parseInt(meta.height) || 0;
+                if (h > w * 1.2) {
+                    card.classList.add('portrait');
+                    img.classList.add('gallery-img-portrait');
+                } else {
+                    img.classList.add('gallery-img-landscape');
+                }
+
+                imgContainer.appendChild(img);
+                card.appendChild(imgContainer);
+
+                const info = document.createElement('div');
+                info.className = 'feed-info-overlay';
+                info.innerHTML = `<h3>🖼️ ${image.filename || 'Image'}</h3>`;
+                card.appendChild(info);
+
+                feed.appendChild(card);
+                observer.observe(card);
+            }
         });
 
-        container.appendChild(grid);
+        container.appendChild(feed);
     },
 
     renderGallery: async (container) => {
@@ -902,6 +1038,85 @@ const UI = {
         }, { root: feed, threshold: 0.6 });
 
         Array.from(feed.children).forEach(card => observer.observe(card));
+        // ── Hypnotic Popup System ──
+        const hypnoBtn = document.createElement('button');
+        hypnoBtn.className = 'hypno-toggle-btn';
+        hypnoBtn.innerHTML = '🌀';
+        hypnoBtn.title = 'Hypnotic Mode';
+        let hypnoActive = false;
+        let hypnoIntervals = [];
+
+        const stopHypno = () => {
+            hypnoActive = false;
+            hypnoBtn.classList.remove('active');
+            hypnoIntervals.forEach(id => clearTimeout(id));
+            hypnoIntervals = [];
+            container.querySelectorAll('.hypno-popup').forEach(el => el.remove());
+        };
+
+        const spawnPopup = () => {
+            if (!hypnoActive) return;
+            const allImages = Gallery.getAll();
+            if (allImages.length === 0) return;
+
+            const randImg = allImages[Math.floor(Math.random() * allImages.length)];
+            const popup = document.createElement('div');
+            popup.className = 'hypno-popup';
+
+            const img = document.createElement('img');
+            img.src = Gallery.getImageURL(randImg, 600);
+            img.alt = '';
+            popup.appendChild(img);
+
+            // Random position, size, rotation, duration
+            const size = 120 + Math.random() * 280; // 120-400px
+            const x = Math.random() * (window.innerWidth - size);
+            const y = Math.random() * (window.innerHeight - size);
+            const rotation = -30 + Math.random() * 60;
+            const duration = 1500 + Math.random() * 3000;
+            const scale = 0.5 + Math.random() * 1;
+
+            popup.style.cssText = `
+                left: ${x}px;
+                top: ${y}px;
+                width: ${size}px;
+                height: ${size}px;
+                --rotate: ${rotation}deg;
+                --scale: ${scale};
+                --duration: ${duration}ms;
+                animation: hypnoAppear ${duration}ms ease-in-out forwards;
+            `;
+
+            container.appendChild(popup);
+
+            // Remove after animation
+            const removeId = setTimeout(() => {
+                popup.classList.add('hypno-fade-out');
+                setTimeout(() => popup.remove(), 600);
+            }, duration);
+            hypnoIntervals.push(removeId);
+
+            // Spawn next
+            const nextDelay = 200 + Math.random() * 800;
+            const nextId = setTimeout(spawnPopup, nextDelay);
+            hypnoIntervals.push(nextId);
+        };
+
+        hypnoBtn.onclick = () => {
+            if (hypnoActive) {
+                stopHypno();
+                Toast.show('Hypnotic mode off');
+            } else {
+                hypnoActive = true;
+                hypnoBtn.classList.add('active');
+                Toast.show('🌀 Hypnotic mode ON', 'info');
+                // Spawn multiple initial popups
+                for (let i = 0; i < 5; i++) {
+                    setTimeout(spawnPopup, i * 300);
+                }
+            }
+        };
+        container.appendChild(hypnoBtn);
     },
 
     renderProfile: async (container) => {
@@ -916,10 +1131,11 @@ const UI = {
             profile.className = 'profile-container';
 
             const galleryCount = Gallery.count();
+            const videoCount = Store.get('videos').length;
             const stats = {
-                videos: Store.get('videos').length,
+                videos: videoCount,
                 likes: (Store.get('likes') || []).length,
-                playlists: (Store.get('playlists') || []).length,
+                mix: videoCount + galleryCount,
                 gallery: galleryCount
             };
 
@@ -949,9 +1165,9 @@ const UI = {
                         <span class="stat-label">Liked</span>
                     </div>
                     <div class="stat-card">
-                        <span class="stat-icon">📂</span>
-                        <span class="stat-value">${stats.playlists}</span>
-                        <span class="stat-label">Playlists</span>
+                        <span class="stat-icon">🔀</span>
+                        <span class="stat-value">${stats.mix}</span>
+                        <span class="stat-label">Mix</span>
                     </div>
                     <div class="stat-card">
                         <span class="stat-icon">🖼️</span>
@@ -1044,158 +1260,7 @@ const UI = {
         }
     },
 
-    // ---- Modals ----
-
-    showCreatePlaylistModal: () => {
-        const modalContent = `
-            <div class="modal-form">
-                <label for="playlist-name-input" class="modal-label">Playlist Name</label>
-                <input type="text" id="playlist-name-input" class="modal-input" placeholder="My Awesome Playlist" autofocus>
-                <button id="modal-create-btn" class="btn-primary" style="width:100%;margin-top:1rem;">Create</button>
-            </div>
-        `;
-
-        const modal = Modal('Create New Playlist', modalContent);
-        document.body.appendChild(modal);
-
-        const input = modal.querySelector('#playlist-name-input');
-        const createBtn = modal.querySelector('#modal-create-btn');
-
-        const doCreate = () => {
-            const name = input.value.trim();
-            if (!name) {
-                Toast.show('Please enter a playlist name', 'error');
-                return;
-            }
-            Playlist.create(name);
-            Toast.show(`Playlist "${name}" created!`);
-            modal.classList.remove('open');
-            setTimeout(() => modal.remove(), 300);
-
-            // Refresh playlists view if currently on it
-            const content = document.getElementById('content');
-            if (window.location.hash === '#/playlist' || window.location.hash === '#/playlists') {
-                UI.renderPlaylists(content);
-            }
-            UI.updateSidebarPlaylists();
-        };
-
-        createBtn.onclick = doCreate;
-        input.onkeydown = (e) => {
-            if (e.key === 'Enter') doCreate();
-        };
-    },
-
-    showAddToPlaylistModal: (video) => {
-        const playlists = Store.get('playlists') || [];
-
-        let listHtml = '';
-        if (playlists.length === 0) {
-            listHtml = '<p class="text-secondary" style="margin-bottom:1rem;">No playlists yet. Create one first!</p>';
-        } else {
-            listHtml = `<div class="modal-playlist-list">
-                ${playlists.map(p => `
-                    <button class="modal-playlist-item" data-id="${p.id}">
-                        <span>📂</span>
-                        <span>${p.name}</span>
-                        <span class="text-secondary" style="margin-left:auto;">${p.videos.length} videos</span>
-                    </button>
-                `).join('')}
-            </div>`;
-        }
-
-        const modalContent = `
-            ${listHtml}
-            <hr style="border:none;border-top:1px solid var(--border-color);margin:1rem 0;">
-            <button id="modal-new-playlist-btn" class="btn-secondary" style="width:100%;">➕ Create New Playlist</button>
-        `;
-
-        const modal = Modal('Add to Playlist', modalContent);
-        document.body.appendChild(modal);
-
-        // Click on existing playlist
-        modal.querySelectorAll('.modal-playlist-item').forEach(btn => {
-            btn.onclick = () => {
-                const playlistId = btn.dataset.id;
-                const added = Playlist.addVideo(playlistId, video);
-                if (added) {
-                    Toast.show('Added to playlist!');
-                } else {
-                    Toast.show('Video already in playlist', 'error');
-                }
-                modal.classList.remove('open');
-                setTimeout(() => modal.remove(), 300);
-            };
-        });
-
-        // Create new playlist then add
-        const newBtn = modal.querySelector('#modal-new-playlist-btn');
-        if (newBtn) {
-            newBtn.onclick = () => {
-                modal.classList.remove('open');
-                setTimeout(() => {
-                    modal.remove();
-                    // Show create modal, then auto-add video to it
-                    UI.showCreatePlaylistAndAddVideo(video);
-                }, 300);
-            };
-        }
-    },
-
-    showCreatePlaylistAndAddVideo: (video) => {
-        const modalContent = `
-            <div class="modal-form">
-                <label for="playlist-name-input" class="modal-label">Playlist Name</label>
-                <input type="text" id="playlist-name-input" class="modal-input" placeholder="My Awesome Playlist" autofocus>
-                <button id="modal-create-add-btn" class="btn-primary" style="width:100%;margin-top:1rem;">Create & Add Video</button>
-            </div>
-        `;
-
-        const modal = Modal('Create New Playlist', modalContent);
-        document.body.appendChild(modal);
-
-        const input = modal.querySelector('#playlist-name-input');
-        const createBtn = modal.querySelector('#modal-create-add-btn');
-
-        const doCreate = () => {
-            const name = input.value.trim();
-            if (!name) {
-                Toast.show('Please enter a playlist name', 'error');
-                return;
-            }
-            const newPlaylist = Playlist.create(name);
-            Playlist.addVideo(newPlaylist.id, video);
-            Toast.show(`Created "${name}" and added video!`);
-            modal.classList.remove('open');
-            setTimeout(() => modal.remove(), 300);
-            UI.updateSidebarPlaylists();
-        };
-
-        createBtn.onclick = doCreate;
-        input.onkeydown = (e) => {
-            if (e.key === 'Enter') doCreate();
-        };
-    },
-
     // ---- Helpers ----
-
-    updateSidebarPlaylists: () => {
-        const sidebarPlaylists = document.getElementById('sidebar-playlists');
-        if (!sidebarPlaylists) return;
-
-        const playlists = Store.get('playlists') || [];
-        if (playlists.length === 0) {
-            sidebarPlaylists.innerHTML = '<p style="font-size: 0.8rem; color: #666;">No playlists yet</p>';
-            return;
-        }
-
-        sidebarPlaylists.innerHTML = playlists.map(p => `
-            <a href="#/playlist?id=${p.id}" class="nav-item sidebar-playlist-link">
-                <span>📂</span>
-                <span>${p.name}</span>
-            </a>
-        `).join('');
-    },
 
     timeAgo: (dateString) => {
         const now = new Date();

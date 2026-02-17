@@ -3,8 +3,7 @@
 const routes = {
     '/': 'home',
     '/video': 'video',
-    '/playlist': 'playlist',
-    '/playlists': 'playlist',
+    '/mix': 'mix',
     '/likes': 'likes',
     '/gallery': 'gallery',
     '/profile': 'profile',
