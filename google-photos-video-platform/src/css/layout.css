@@ -1440,17 +1440,82 @@
     }
 }
 
-/* 10. Hue Shift */
-.hypno-hue-shift {
-    animation: hueShift 10s linear infinite;
+/* 10. Invert Mode (Replaces Hue Shift) */
+.hypno-invert {
+    filter: invert(1) hue-rotate(180deg);
+    transition: filter 0.2s;
 }
 
-@keyframes hueShift {
-    0% {
-        filter: hue-rotate(0deg);
+/* 11. Violent Shake */
+.hypno-shake {
+    animation: hypnoShake 0.5s cubic-bezier(.36, .07, .19, .97) both infinite;
+}
+
+@keyframes hypnoShake {
+
+    10%,
+    90% {
+        transform: translate3d(-1px, 0, 0);
     }
 
-    100% {
-        filter: hue-rotate(360deg);
+    20%,
+    80% {
+        transform: translate3d(2px, 0, 0);
     }
+
+    30%,
+    50%,
+    70% {
+        transform: translate3d(-4px, 0, 0);
+    }
+
+    40%,
+    60% {
+        transform: translate3d(4px, 0, 0);
+    }
+}
+
+/* 12. Blur Pulse */
+.hypno-blur {
+    animation: hypnoBlurPulse 1s ease-in-out infinite alternate;
+}
+
+@keyframes hypnoBlurPulse {
+    from {
+        filter: blur(0px);
+    }
+
+    to {
+        filter: blur(4px);
+    }
+}
+
+
+/* 13. Perspective Tilt */
+.hypno-tilt {
+    transform: perspective(100vh) rotateX(5deg) scale(1.02);
+    transition: transform 0.5s;
+}
+
+.hypno-tilt-reverse {
+    transform: perspective(100vh) rotateX(-5deg) scale(1.02);
+    transition: transform 0.5s;
+}
+
+/* 14. Video Ghost Delay */
+.hypno-ghost-video {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 5;
+    opacity: 0.6;
+    mix-blend-mode: screen;
+    /* Or difference for crazier effect */
+    filter: blur(2px) contrast(1.5);
+    transform: scale(1.05);
+    /* Slight zoom for separation */
+    transition: opacity 1s ease;
 }

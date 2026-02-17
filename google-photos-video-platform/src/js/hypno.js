@@ -45,7 +45,7 @@ const ChaosEngine = {
             const layers = container.querySelectorAll('.hypno-spiral, .hypno-vignette, .hypno-static, .hypno-subliminal-text');
             layers.forEach(el => el.remove());
         }
-        document.body.classList.remove('hypno-breathe', 'hypno-glitch', 'hypno-hue-shift', 'hypno-mirror-x', 'hypno-mirror-y');
+        document.body.classList.remove('hypno-breathe', 'hypno-glitch', 'hypno-invert', 'hypno-shake', 'hypno-blur', 'hypno-tilt', 'hypno-tilt-reverse', 'hypno-mirror-x', 'hypno-mirror-y');
     },
 
     addLayer(container, className) {
@@ -121,8 +121,19 @@ const ChaosEngine = {
             setTimeout(() => document.body.classList.remove(cls), 3000);
         }
 
-        // 7. Toggle Layers (Spiral/Vignette/Static)
-        else if (roll < 0.7) {
+        // 7. NEW: Shake (5% chance)
+        else if (roll < 0.50) {
+            document.body.classList.add('hypno-shake');
+            setTimeout(() => document.body.classList.remove('hypno-shake'), 500);
+        }
+
+        // 8. NEW: Video Delay (Ghosting) (15% chance)
+        else if (roll < 0.65) {
+            this.triggerVideoDelay();
+        }
+
+        // 9. Toggle Layers (Spiral/Vignette/Static)
+        else if (roll < 0.8) {
             const spiral = activeContainer.querySelector('.hypno-spiral');
             if (spiral) spiral.classList.toggle('active', Math.random() > 0.3);
 
@@ -131,13 +142,62 @@ const ChaosEngine = {
 
             const stat = activeContainer.querySelector('.hypno-static');
             if (stat) stat.classList.toggle('active', Math.random() > 0.6);
+
+            // Blur Pulse toggle
+            document.body.classList.toggle('hypno-blur', Math.random() > 0.8);
         }
 
-        // 8. Breathe & Hue (Persistent toggles)
+        // 10. Breathe & Invert & Tilt (Persistent toggles)
         else {
             document.body.classList.toggle('hypno-breathe', Math.random() > 0.3);
-            document.body.classList.toggle('hypno-hue-shift', Math.random() > 0.7);
+            // REPLACED Hue Shift with Invert
+            document.body.classList.toggle('hypno-invert', Math.random() > 0.8);
+
+            // Perspective Tilt
+            const tilt = Math.random();
+            document.body.classList.remove('hypno-tilt', 'hypno-tilt-reverse');
+            if (tilt > 0.7) document.body.classList.add('hypno-tilt');
+            else if (tilt > 0.85) document.body.classList.add('hypno-tilt-reverse');
         }
+    },
+
+    triggerVideoDelay() {
+        if (!activeContainer) return;
+        const videos = activeContainer.querySelectorAll('video');
+        if (videos.length === 0) return;
+
+        videos.forEach(original => {
+            if (original.dataset.hasGhost) return; // Prevent stacking
+
+            const ghost = original.cloneNode(true);
+            ghost.className = 'hypno-ghost-video';
+            ghost.muted = true;
+            ghost.removeAttribute('controls'); // Ensure clean look
+            ghost.dataset.isGhost = "true";
+
+            // Sync time with delay
+            const delay = 0.4; // 400ms delay
+            ghost.currentTime = Math.max(0, original.currentTime - delay);
+            ghost.playbackRate = original.playbackRate;
+
+            if (original.parentNode) {
+                // Ensure parent is relative for absolute positioning
+                const parentStyle = window.getComputedStyle(original.parentNode);
+                if (parentStyle.position === 'static') original.parentNode.style.position = 'relative';
+
+                original.parentNode.appendChild(ghost);
+                original.dataset.hasGhost = "true";
+
+                ghost.play().catch(() => { }); // Ignore play errors
+
+                // Remove after random duration
+                setTimeout(() => {
+                    ghost.style.opacity = 0;
+                    delete original.dataset.hasGhost;
+                    setTimeout(() => ghost.remove(), 1000);
+                }, 2000 + Math.random() * 3000);
+            }
+        });
     }
 };
 
@@ -245,7 +305,7 @@ const runGame = (popup, img, type) => {
         popup.addEventListener('touchend', end);
         popup._cleanup = () => clearInterval(holdInterval);
     }
-    // 3. CATCH (6x)
+    // 3. CATCH (6x) - FIXED LOGIC
     else if (type === 2) {
         let catches = 0;
         const needed = 6;
@@ -253,45 +313,66 @@ const runGame = (popup, img, type) => {
         label.className = 'hypno-counter';
         label.innerText = `🎯 0/${needed}`;
         popup.appendChild(label);
-        let canDodge = true;
 
-        // Improve movement logic
+        let canDodge = true;
+        let lastDodge = 0;
+
         const dodge = () => {
-            if (!canDodge) return;
-            // Ensure it stays within bounds
+            const now = Date.now();
+            // Cooldown to make it catchable (400ms)
+            if (!canDodge || now - lastDodge < 400) return;
+            lastDodge = now;
+
             const maxX = window.innerWidth - popup.offsetWidth;
             const maxY = window.innerHeight - popup.offsetHeight;
-            popup.style.left = Math.max(0, Math.min(maxX, Math.random() * maxX)) + 'px';
-            popup.style.top = Math.max(0, Math.min(maxY, Math.random() * maxY)) + 'px';
+
+            // Move 50% of the time on interaction attempt
+            if (Math.random() > 0.3) {
+                popup.style.left = Math.max(0, Math.min(maxX, Math.random() * maxX)) + 'px';
+                popup.style.top = Math.max(0, Math.min(maxY, Math.random() * maxY)) + 'px';
+            }
         };
 
         const onTouchStart = (e) => {
             // Mobile dodge on touch
             if (canDodge) {
-                e.preventDefault();
+                // e.preventDefault(); // Don't prevent default, allow tap if lucky
                 dodge();
             }
         };
 
         const onAttempt = (e) => {
             e.preventDefault(); e.stopPropagation();
+
+            // 70% chance to dodge instead of click
+            if (Math.random() > 0.3) {
+                dodge();
+                return;
+            }
+
             catches++;
             label.innerText = `🎯 ${catches}/${needed}`;
             canDodge = false;
             popup.style.transform = 'scale(0.95)';
+            popup.style.filter = 'brightness(1.5)';
+
             setTimeout(() => {
                 if (catches >= needed) dismissPopup(popup);
-                else { canDodge = true; popup.style.transform = ''; dodge(); }
-            }, 300);
+                else {
+                    canDodge = true;
+                    popup.style.transform = '';
+                    popup.style.filter = '';
+                    dodge();
+                }
+            }, 200);
         };
 
-        popup.addEventListener('touchstart', onTouchStart, { passive: false });
-        popup.addEventListener('mouseenter', () => { if (canDodge) dodge(); });
+        // REMOVED mouseenter dodge because it made it impossible on desktop
+
         popup.addEventListener('mousedown', onAttempt);
-        // Add touchend as backup for catching if touchstart didn't dodge
-        popup.addEventListener('touchend', (e) => {
-            if (!canDodge) onAttempt(e);
-        });
+        popup.addEventListener('touchstart', onTouchStart, { passive: false });
+        // We handle capture in catch, but if we tap successfully:
+        popup.addEventListener('click', onAttempt);
     }
     // 4. SWIPE (300px)
     else {
