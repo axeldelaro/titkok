@@ -1,55 +1,63 @@
-/* ── Hypnotic Popup Mini-Games ──
- * Spawns random image popups with interactive mini-games.
- * Call HypnoPopups.attach(container) on any page that needs it.
- * Call HypnoPopups.detach() when leaving the page.
+/* ── Hypnotic Popup Mini-Games (Intrusive Mode) ──
+ * Spawns multiple concurrent popups with harder interactive mini-games.
+ * Call HypnoPopups.attach(container) to start the chaos.
  */
 import Gallery from './gallery.js';
 import { Toast } from '../components/toast.js';
 
 let hypnoActive = false;
 let hypnoTimers = [];
-let currentPopup = null;
+let activePopups = new Set();
 let activeContainer = null;
-let cleanupFns = [];
+const MAX_POPUPS = 12; // Allow up to 12 simultaneous popups!
 
 const stop = () => {
     hypnoActive = false;
     hypnoTimers.forEach(id => clearTimeout(id));
     hypnoTimers = [];
     if (activeContainer) {
-        activeContainer.querySelectorAll('.hypno-popup').forEach(el => el.remove());
+        activeContainer.querySelectorAll('.hypno-popup').forEach(el => {
+            if (el._cleanup) el._cleanup();
+            el.remove();
+        });
     }
-    cleanupFns.forEach(fn => fn());
-    cleanupFns = [];
-    currentPopup = null;
+    activePopups.clear();
     const btn = activeContainer?.querySelector('.hypno-toggle-btn');
     if (btn) btn.classList.remove('active');
 };
 
 const dismissPopup = (popup) => {
+    if (popup._cleanup) popup._cleanup(); // Remove listeners immediately
     popup.classList.add('hypno-solved');
+    activePopups.delete(popup);
+
+    // Schedule separation of popups to keep flow
     setTimeout(() => {
         popup.remove();
-        currentPopup = null;
+        // Immediately spawn another to replace it if active
         if (hypnoActive) {
-            const nextId = setTimeout(spawnPopup, 3000 + Math.random() * 4000); // 3-7s
-            hypnoTimers.push(nextId);
+            scheduleSpawn(200 + Math.random() * 800);
         }
-    }, 800);
+    }, 600);
 };
 
-// ── MINI-GAMES (harder, mobile-friendly) ──
+const scheduleSpawn = (delay) => {
+    if (!hypnoActive) return;
+    const id = setTimeout(spawnPopup, delay);
+    hypnoTimers.push(id);
+};
 
-// 1. TAP CHALLENGE — tap 15-30 times (touch-friendly)
-const gameTap = (popup, img) => {
-    const needed = 15 + Math.floor(Math.random() * 16); // 15–30
+// ── MINI-GAMES (HARDER & CHAOTIC) ──
+
+// 1. TAP CHALLENGE — tap 30-50 times
+const gameTap = (popup) => {
+    const needed = 30 + Math.floor(Math.random() * 21); // 30–50
     let taps = 0;
     const counter = document.createElement('div');
     counter.className = 'hypno-counter';
     counter.textContent = `👆 0/${needed}`;
     popup.appendChild(counter);
 
-    // Progress bar
     const bar = document.createElement('div');
     bar.className = 'hypno-progress-bar';
     const fill = document.createElement('div');
@@ -61,24 +69,25 @@ const gameTap = (popup, img) => {
         e.preventDefault();
         e.stopPropagation();
         taps++;
-        const remaining = needed - taps;
         const pct = Math.min(100, (taps / needed) * 100);
         fill.style.width = pct + '%';
-        counter.textContent = remaining > 0 ? `👆 ${taps}/${needed}` : '✅';
-        popup.style.transform = `scale(${1 + Math.random() * 0.05})`;
-        setTimeout(() => popup.style.transform = '', 100);
-        if (remaining <= 0) dismissPopup(popup);
+        counter.textContent = `👆 ${taps}/${needed}`;
+
+        // Chaotic movement on tap
+        popup.style.transform = `translate(${Math.random() * 10 - 5}px, ${Math.random() * 10 - 5}px) scale(${1 + Math.random() * 0.1})`;
+
+        if (taps >= needed) dismissPopup(popup);
     };
     popup.addEventListener('click', onTap);
     popup.addEventListener('touchend', onTap);
 };
 
-// 2. HOLD & REVEAL — hold for 3s on blurred image
+// 2. HOLD & REVEAL — hold for 4s, reset if released
 const gameHold = (popup, img) => {
-    img.style.filter = 'blur(20px) brightness(0.4)';
+    img.style.filter = 'blur(25px) brightness(0.3)';
     const label = document.createElement('div');
     label.className = 'hypno-counter';
-    label.textContent = '✋ Hold 3s';
+    label.textContent = '✋ Hold 4s';
     popup.appendChild(label);
 
     const bar = document.createElement('div');
@@ -93,42 +102,45 @@ const gameHold = (popup, img) => {
 
     const startHold = (e) => {
         e.preventDefault();
+        e.stopPropagation(); // Stop scrolling
         holdInterval = setInterval(() => {
-            progress += 2;
+            progress += 1.5; // Slower progress
             const pct = Math.min(100, progress);
             fill.style.width = pct + '%';
-            img.style.filter = `blur(${Math.max(0, 20 - progress * 0.2)}px) brightness(${0.4 + progress * 0.006})`;
-            label.textContent = `${pct}%`;
+            img.style.filter = `blur(${Math.max(0, 25 - progress * 0.25)}px) brightness(${0.3 + progress * 0.007})`;
+            label.textContent = `${Math.floor(pct)}%`;
             if (progress >= 100) {
                 clearInterval(holdInterval);
                 img.style.filter = 'none';
                 dismissPopup(popup);
             }
-        }, 60); // ~3s total (100 / 2 * 60ms)
+        }, 60);
     };
     const endHold = () => {
         clearInterval(holdInterval);
-        if (progress < 100) {
-            progress = Math.max(0, progress - 10); // Lose some progress
+        if (progress < 100 && progress > 0) {
+            // Punishing reset
+            progress = Math.max(0, progress - 20);
             const pct = Math.min(100, progress);
             fill.style.width = pct + '%';
-            img.style.filter = `blur(${Math.max(0, 20 - progress * 0.2)}px) brightness(${0.4 + progress * 0.006})`;
-            label.textContent = progress > 0 ? `${pct}% — keep holding!` : '✋ Hold 3s';
+            img.style.filter = `blur(${Math.max(0, 25 - progress * 0.25)}px) brightness(${0.3 + progress * 0.007})`;
+            label.textContent = '✋ Don\'t let go!';
         }
     };
 
     popup.addEventListener('mousedown', startHold);
-    popup.addEventListener('touchstart', startHold);
+    popup.addEventListener('touchstart', startHold, { passive: false });
     popup.addEventListener('mouseup', endHold);
     popup.addEventListener('mouseleave', endHold);
     popup.addEventListener('touchend', endHold);
-    popup.addEventListener('touchcancel', endHold);
+
+    popup._cleanup = () => clearInterval(holdInterval);
 };
 
-// 3. CATCH ME — image dodges, catch 5 times
-const gameCatch = (popup, img) => {
+// 3. CATCH ME — faster, 8 catches
+const gameCatch = (popup) => {
     let catches = 0;
-    const needed = 5;
+    const needed = 8;
     const label = document.createElement('div');
     label.className = 'hypno-counter';
     label.textContent = `🎯 0/${needed}`;
@@ -138,14 +150,14 @@ const gameCatch = (popup, img) => {
 
     const dodge = () => {
         if (!canDodge) return;
-        const maxX = window.innerWidth - popup.offsetWidth - 10;
-        const maxY = window.innerHeight - popup.offsetHeight - 10;
-        popup.style.left = (10 + Math.random() * maxX) + 'px';
-        popup.style.top = (10 + Math.random() * maxY) + 'px';
-        popup.style.transition = 'left 0.25s ease, top 0.25s ease';
+        // Move anywhere on screen
+        const maxX = window.innerWidth - popup.offsetWidth;
+        const maxY = window.innerHeight - popup.offsetHeight;
+        popup.style.transition = 'left 0.2s cubic-bezier(0.1, 0.7, 1.0, 0.1), top 0.2s cubic-bezier(0.1, 0.7, 1.0, 0.1)';
+        popup.style.left = (Math.random() * maxX) + 'px';
+        popup.style.top = (Math.random() * maxY) + 'px';
     };
 
-    // On mobile: dodge on touchstart (fast finger)
     const onDodge = (e) => {
         if (canDodge) {
             e.preventDefault();
@@ -159,28 +171,29 @@ const gameCatch = (popup, img) => {
         e.preventDefault();
         e.stopPropagation();
         catches++;
-        const remaining = needed - catches;
-        label.textContent = remaining > 0 ? `🎯 ${catches}/${needed}` : '✅';
-        if (remaining <= 0) {
-            canDodge = false;
-            dismissPopup(popup);
-        } else {
-            canDodge = false;
-            popup.style.transform = 'scale(0.9)';
-            setTimeout(() => {
-                popup.style.transform = '';
+        label.textContent = `🎯 ${catches}/${needed}`;
+        // Brief freeze
+        canDodge = false;
+        popup.style.transform = 'scale(0.95)';
+        popup.style.borderColor = '#fff';
+        setTimeout(() => {
+            if (catches >= needed) {
+                dismissPopup(popup);
+            } else {
                 canDodge = true;
-            }, 600);
-        }
+                popup.style.transform = '';
+                popup.style.borderColor = '';
+                dodge(); // Immediate dodge after catch
+            }
+        }, 400);
     };
-    popup.addEventListener('click', onCatch);
-    popup.addEventListener('touchend', onCatch);
+    popup.addEventListener('mousedown', onCatch); // click matches mouseup, mousedown is faster
+    popup.addEventListener('touchend', onCatch); // Fallback if dodge doesn't trigger
 };
 
-// 4. PATTERN TAP — tap corners in order (TL, TR, BR, BL)
-const gamePattern = (popup, img) => {
+// 4. CORNER CHAOS — Tap 4 corners but they rotate/shift
+const gamePattern = (popup) => {
     const zones = ['↖', '↗', '↘', '↙'];
-    const zoneLabels = ['Top-Left', 'Top-Right', 'Bottom-Right', 'Bottom-Left'];
     let step = 0;
 
     const label = document.createElement('div');
@@ -188,47 +201,53 @@ const gamePattern = (popup, img) => {
     label.textContent = `Tap ${zones[0]}`;
     popup.appendChild(label);
 
-    // Create 4 tap zones
-    const zoneEls = [];
     const positions = [
         { top: '0', left: '0' },
         { top: '0', right: '0' },
         { bottom: '0', right: '0' },
         { bottom: '0', left: '0' }
     ];
+
+    // Randomize zone order
+    const sequence = [0, 1, 2, 3].sort(() => Math.random() - 0.5);
+
     positions.forEach((pos, i) => {
         const zone = document.createElement('div');
         zone.className = 'hypno-tap-zone';
         zone.dataset.idx = i;
         Object.assign(zone.style, pos, {
-            position: 'absolute', width: '50%', height: '50%', zIndex: '5'
+            position: 'absolute', width: '40%', height: '40%', zIndex: '5', cursor: 'pointer'
         });
-        if (i === step) zone.classList.add('hypno-zone-active');
+
+        // Highlight first target
+        if (i === sequence[0]) zone.classList.add('hypno-zone-active');
+
         popup.appendChild(zone);
-        zoneEls.push(zone);
 
         const onTap = (e) => {
             e.preventDefault();
             e.stopPropagation();
-            if (parseInt(zone.dataset.idx) === step) {
+            if (i === sequence[step]) {
                 zone.classList.remove('hypno-zone-active');
                 step++;
                 if (step >= 4) {
-                    label.textContent = '✅';
                     dismissPopup(popup);
                 } else {
-                    label.textContent = `Tap ${zones[step]}`;
-                    zoneEls[step].classList.add('hypno-zone-active');
+                    label.textContent = `Tap ${zones[sequence[step]]}`;
+                    // Find DOM element for next step (a bit hacking since we didn't save refs, but ok)
+                    const nextZone = popup.querySelector(`.hypno-tap-zone[data-idx="${sequence[step]}"]`);
+                    if (nextZone) nextZone.classList.add('hypno-zone-active');
                 }
             } else {
-                // Wrong zone — reset!
+                // Reset on fail
                 step = 0;
-                zoneEls.forEach(z => z.classList.remove('hypno-zone-active'));
-                zoneEls[0].classList.add('hypno-zone-active');
-                label.textContent = `❌ Reset! Tap ${zones[0]}`;
+                popup.querySelectorAll('.hypno-tap-zone').forEach(z => z.classList.remove('hypno-zone-active'));
+                const firstZone = popup.querySelector(`.hypno-tap-zone[data-idx="${sequence[0]}"]`);
+                if (firstZone) firstZone.classList.add('hypno-zone-active');
+                label.textContent = `❌ FAIL! Tap ${zones[sequence[0]]}`;
                 popup.style.animation = 'none';
                 popup.offsetHeight;
-                popup.style.animation = 'hypnoShake 0.3s ease';
+                popup.style.animation = 'hypnoShake 0.4s ease';
             }
         };
         zone.addEventListener('click', onTap);
@@ -236,11 +255,12 @@ const gamePattern = (popup, img) => {
     });
 };
 
-// 5. LONG SWIPE — drag 200px+ to dismiss
-const gameSwipe = (popup, img) => {
+// 5. DRAG & DROP — Drag to a specific target appearing on screen
+// Simplified to "Long Swipe" for now but longer distance
+const gameSwipe = (popup) => {
     const label = document.createElement('div');
     label.className = 'hypno-counter';
-    label.textContent = '👉 Drag away';
+    label.textContent = '👉 Drag 300px';
     popup.appendChild(label);
 
     const bar = document.createElement('div');
@@ -252,10 +272,11 @@ const gameSwipe = (popup, img) => {
 
     let startX = 0, startY = 0, origLeft = 0, origTop = 0;
     let dragging = false;
-    const THRESHOLD = 200;
+    const THRESHOLD = 300; // Harder swipe
 
     const down = (e) => {
         e.preventDefault();
+        e.stopPropagation();
         dragging = true;
         const pt = e.touches ? e.touches[0] : e;
         startX = pt.clientX;
@@ -263,6 +284,7 @@ const gameSwipe = (popup, img) => {
         origLeft = popup.offsetLeft;
         origTop = popup.offsetTop;
         popup.style.transition = 'none';
+        popup.style.zIndex = 10000; // Bring to front
     };
     const move = (e) => {
         if (!dragging) return;
@@ -275,12 +297,12 @@ const gameSwipe = (popup, img) => {
         const dist = Math.sqrt(dx * dx + dy * dy);
         const pct = Math.min(100, (dist / THRESHOLD) * 100);
         fill.style.width = pct + '%';
-        popup.style.opacity = Math.max(0.2, 1 - dist / (THRESHOLD * 1.5));
-        label.textContent = dist > THRESHOLD ? '🚀 Release!' : `${Math.round(pct)}%`;
+        label.textContent = dist > THRESHOLD ? '🚀 Release!' : `${Math.round(dist)}px`;
     };
     const up = (e) => {
         if (!dragging) return;
         dragging = false;
+        popup.style.zIndex = '';
         const pt = e.changedTouches ? e.changedTouches[0] : e;
         const dx = pt.clientX - startX;
         const dy = pt.clientY - startY;
@@ -288,104 +310,77 @@ const gameSwipe = (popup, img) => {
         if (dist > THRESHOLD) {
             dismissPopup(popup);
         } else {
-            popup.style.transition = 'left 0.3s ease, top 0.3s ease, opacity 0.3s ease';
+            // Snap back
+            popup.style.transition = 'all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
             popup.style.left = origLeft + 'px';
             popup.style.top = origTop + 'px';
-            popup.style.opacity = '1';
             fill.style.width = '0%';
-            label.textContent = '👉 Drag away';
+            label.textContent = '👉 Try harder!';
         }
     };
 
     popup.addEventListener('mousedown', down);
     popup.addEventListener('touchstart', down, { passive: false });
-    const mvMouse = (e) => move(e);
-    const mvTouch = (e) => move(e);
-    const upMouse = (e) => up(e);
-    const upTouch = (e) => up(e);
-    document.addEventListener('mousemove', mvMouse);
-    document.addEventListener('touchmove', mvTouch, { passive: false });
-    document.addEventListener('mouseup', upMouse);
-    document.addEventListener('touchend', upTouch);
-    cleanupFns.push(() => {
-        document.removeEventListener('mousemove', mvMouse);
-        document.removeEventListener('touchmove', mvTouch);
-        document.removeEventListener('mouseup', upMouse);
-        document.removeEventListener('touchend', upTouch);
-    });
-};
+    const mv = (e) => move(e);
+    const end = (e) => up(e);
+    // Bind to document to catch drags outside popup
+    document.addEventListener('mousemove', mv);
+    document.addEventListener('touchmove', mv, { passive: false });
+    document.addEventListener('mouseup', end);
+    document.addEventListener('touchend', end);
 
-// 6. RAPID DOUBLE-TAP — tap twice fast (within 400ms)
-const gameDoubleTap = (popup, img) => {
-    const label = document.createElement('div');
-    label.className = 'hypno-counter';
-    label.textContent = '⚡ Double-tap fast!';
-    popup.appendChild(label);
-
-    let lastTap = 0;
-    let fails = 0;
-
-    const onTap = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const now = Date.now();
-        if (now - lastTap < 400) {
-            label.textContent = '✅';
-            dismissPopup(popup);
-        } else {
-            lastTap = now;
-            // Single tap — spin + slight feedback
-            popup.style.animation = 'none';
-            popup.offsetHeight;
-            popup.style.animation = 'hypnoSpin 0.4s ease';
-            fails++;
-            if (fails > 3) label.textContent = '⚡ Faster!';
-        }
+    // Attach cleanup function to popup
+    popup._cleanup = () => {
+        document.removeEventListener('mousemove', mv);
+        document.removeEventListener('touchmove', mv);
+        document.removeEventListener('mouseup', end);
+        document.removeEventListener('touchend', end);
     };
-    popup.addEventListener('click', onTap);
-    popup.addEventListener('touchend', onTap);
 };
 
-const miniGames = [gameTap, gameHold, gameCatch, gamePattern, gameSwipe, gameDoubleTap];
+const miniGames = [gameTap, gameHold, gameCatch, gamePattern, gameSwipe];
 
 function spawnPopup() {
-    if (!hypnoActive || currentPopup || !activeContainer) return;
+    if (!hypnoActive || !activeContainer) return;
+    if (activePopups.size >= MAX_POPUPS) return; // Cap at 12
+
     const allImages = Gallery.getAll();
     if (allImages.length === 0) return;
 
     const randImg = allImages[Math.floor(Math.random() * allImages.length)];
     const popup = document.createElement('div');
     popup.className = 'hypno-popup';
-    currentPopup = popup;
 
     const img = document.createElement('img');
     img.src = Gallery.getImageURL(randImg, 400);
-    img.alt = '';
     img.draggable = false;
     popup.appendChild(img);
 
-    // Smaller sizes: 120–180px
-    const size = 120 + Math.random() * 60;
-    const x = 20 + Math.random() * (window.innerWidth - size - 40);
-    const y = 80 + Math.random() * (window.innerHeight - size - 160);
+    // Random Chaos Size
+    const size = 140 + Math.random() * 100;
+    // Random position allowing slight overflow
+    const x = Math.random() * (window.innerWidth - size);
+    const y = Math.random() * (window.innerHeight - size);
 
     popup.style.cssText = `
         left: ${x}px; top: ${y}px;
         width: ${size}px; height: ${size}px;
-        animation: hypnoAppearSoft 0.6s ease-out forwards;
+        animation: hypnoAppearSoft 0.4s ease-out forwards;
+        transform: rotate(${Math.random() * 20 - 10}deg);
     `;
 
     activeContainer.appendChild(popup);
+    activePopups.add(popup);
 
-    // Pick a random mini-game
     const game = miniGames[Math.floor(Math.random() * miniGames.length)];
     game(popup, img);
+
+    // Schedule next spawn aggressively
+    scheduleSpawn(500 + Math.random() * 1000); // 0.5s - 1.5s delay
 }
 
 const HypnoPopups = {
-    /** Attach the hypno toggle button to a container. Call once per page render. */
     attach(container) {
-        // Cleanup previous if any
         this.detach();
         activeContainer = container;
 
@@ -398,20 +393,21 @@ const HypnoPopups = {
             e.stopPropagation();
             if (hypnoActive) {
                 stop();
-                Toast.show('Hypnotic mode off');
+                Toast.show('Hypnotic mode off... for now.');
             } else {
                 hypnoActive = true;
                 btn.classList.add('active');
-                Toast.show('🌀 Mini-games ON!', 'info');
-                const id = setTimeout(spawnPopup, 1500);
-                hypnoTimers.push(id);
+                Toast.show('🌀 CHAOS MODE ACTIVATED!', 'info');
+                // Spawn cluster start
+                scheduleSpawn(500);
+                setTimeout(() => scheduleSpawn(800), 100);
+                setTimeout(() => scheduleSpawn(1200), 200);
             }
         });
 
         container.appendChild(btn);
     },
 
-    /** Detach and clean up everything */
     detach() {
         stop();
         activeContainer = null;
