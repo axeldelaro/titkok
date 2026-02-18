@@ -68,6 +68,11 @@
     mix-blend-mode: hard-light;
 }
 
+.hypno-popup {
+    position: absolute;
+    /* Base style for popups */
+}
+
 /* 1. SCANLINES */
 .hypno-scanlines {
     position: absolute;
@@ -136,7 +141,6 @@
 /* 4. PIXELATE (Backdrop) */
 .hypno-pixelate {
     backdrop-filter: blur(4px) contrast(1.5);
-    /* Note: True pixelation specific to element isn't standard CSS filter yet, using blur/contrast combo */
 }
 
 /* 5. LIQUID WARP */
@@ -305,6 +309,111 @@
 
 .hypno-blur {
     filter: blur(4px);
+}
+
+/* Toggle Button */
+.hypno-toggle-btn {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 100;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: white;
+    font-size: 1.5rem;
+    cursor: pointer;
+    backdrop-filter: blur(5px);
+    transition: all 0.3s;
+}
+
+.hypno-toggle-btn:hover {
+    transform: scale(1.1);
+    background: rgba(0, 0, 0, 0.8);
+}
+
+.hypno-toggle-btn.active {
+    background: #7c3aed;
+    /* Violet/Purple */
+    box-shadow: 0 0 15px #7c3aed;
+    animation: pulse 2s infinite;
+}
+
+/* Game Styles */
+.hypno-counter {
+    position: absolute;
+    top: -25px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.8);
+    color: #fff;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 12px;
+    white-space: nowrap;
+    pointer-events: none;
+}
+
+.hypno-progress-bar {
+    position: absolute;
+    bottom: -10px;
+    left: 0;
+    width: 100%;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.hypno-progress-fill {
+    height: 100%;
+    background: #0f0;
+    width: 0%;
+    transition: width 0.1s linear;
+}
+
+.hypno-progress-fill.hold-fill {
+    background: #f00;
+    transition: width 0.06s linear;
+}
+
+.hypno-solved {
+    animation: scaleOut 0.5s forwards !important;
+}
+
+@keyframes scaleOut {
+    to {
+        transform: scale(0);
+        opacity: 0;
+    }
+}
+
+.hypno-cursor-ghost {
+    position: fixed;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.5);
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    z-index: 10000;
+    filter: blur(4px);
+    opacity: 0.6;
+}
+
+.hypno-subliminal-text {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 5rem;
+    font-weight: 900;
+    color: rgba(255, 255, 255, 0.1);
+    pointer-events: none;
+    z-index: 9998;
+    mix-blend-mode: overlay;
 }
 
 /* Config Modal */
