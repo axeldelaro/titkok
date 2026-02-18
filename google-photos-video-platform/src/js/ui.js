@@ -12,7 +12,7 @@ import Gallery from './gallery.js';
 // PendingUploads removed — simple upload flow
 import { Toast } from '../components/toast.js';
 import Modal from '../components/modal.js';
-import HypnoPopups from './hypno.js';
+import HypnoPopups, { getConfig, updateConfig } from './hypno.js';
 
 const UI = {
     init: () => {
@@ -1100,12 +1100,62 @@ const UI = {
                     </div>
                 </div>
 
+
                 <div class="profile-actions">
+                    <button id="profile-hypno-settings" class="btn-secondary" style="margin-right:10px">⚙️ Hypno Settings</button>
                     <button id="profile-logout" class="btn-primary">Sign Out</button>
                 </div>
             `;
 
             profile.querySelector('#profile-logout').onclick = () => Auth.logout();
+
+            profile.querySelector('#profile-hypno-settings').onclick = () => {
+                const config = getConfig();
+                const container = document.createElement('div');
+                container.style.padding = '10px';
+
+                const categories = {
+                    'Visual / Chill': ['scanlines', 'rgbShift', 'pixelate', 'colorCycle', 'textSubliminal', 'breathe', 'tilt', 'mirror'],
+                    'Intense / Chaos': ['kaleidoscope', 'liquidWarp', 'vortex', 'strobe', 'doubleVision', 'tunnel', 'verticalStretch', 'glitch']
+                };
+
+                for (const [title, keys] of Object.entries(categories)) {
+                    const h3 = document.createElement('h3');
+                    h3.textContent = title;
+                    h3.style.cssText = 'color:var(--text-secondary); font-size:0.9rem; margin:15px 0 10px; text-transform:uppercase; letter-spacing:1px; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:5px;';
+                    container.appendChild(h3);
+
+                    const group = document.createElement('div');
+                    group.className = 'hypno-config-group';
+
+                    keys.forEach(key => {
+                        const label = document.createElement('label');
+                        label.className = 'hypno-checkbox-label';
+
+                        const input = document.createElement('input');
+                        input.type = 'checkbox';
+                        input.checked = config[key] !== false;
+                        input.onchange = (e) => updateConfig({ [key]: e.target.checked });
+
+                        const text = document.createElement('span');
+                        // Format camelCase to Title Case
+                        text.textContent = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+
+                        label.appendChild(input);
+                        label.appendChild(text);
+                        group.appendChild(label);
+                    });
+                    container.appendChild(group);
+                }
+
+                const modal = Modal('Hypno Configuration', '');
+                const body = modal.querySelector('.modal-body');
+                body.innerHTML = ''; // clear default content if any
+                body.appendChild(container);
+                // Make modal wider/custom
+                modal.querySelector('.modal-content').classList.add('hypno-config-modal');
+                document.body.appendChild(modal);
+            };
 
             container.appendChild(profile);
 
