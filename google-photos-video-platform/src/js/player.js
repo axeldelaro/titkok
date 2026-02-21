@@ -27,11 +27,11 @@ export default class Player {
             { name: 'Cool', css: 'hue-rotate(180deg) saturate(1.3)' },
             { name: 'Vintage', css: 'sepia(0.6) contrast(1.1) brightness(0.9)' },
             { name: 'Negative', css: 'invert(1) contrast(1.3)' },
-            { name: 'Delay 1', css: 'brightness(1.1) contrast(0.9) blur(0.3px) saturate(1.2)' },
-            { name: 'Delay 2', css: 'brightness(1.2) contrast(0.75) blur(0.8px) saturate(1.4) hue-rotate(10deg)' },
-            { name: 'Delay 3', css: 'brightness(1.4) contrast(0.6) blur(1.5px) saturate(1.6) hue-rotate(25deg)' },
-            { name: 'Delay 4', css: 'brightness(1.6) contrast(0.5) blur(2.5px) saturate(2) hue-rotate(45deg)' },
-            { name: 'Delay 5', css: 'brightness(1.8) contrast(0.4) blur(4px) saturate(2.5) hue-rotate(60deg)' }
+            { name: 'Delay 1', css: 'none', delay: 1 },
+            { name: 'Delay 2', css: 'none', delay: 2 },
+            { name: 'Delay 3', css: 'none', delay: 3 },
+            { name: 'Delay 4', css: 'none', delay: 4 },
+            { name: 'Delay 5', css: 'none', delay: 5 }
         ];
         // Feature: Cinema Mode (#11)
         this._cinemaMode = false;
@@ -39,6 +39,8 @@ export default class Player {
         this._zoomLevel = 1;
         this._panX = 0;
         this._panY = 0;
+        // Delay echo clones
+        this._delayClones = [];
 
         this.init();
     }
@@ -391,12 +393,18 @@ export default class Player {
             loopBtn.style.opacity = this.video.loop ? '1' : '0.5';
         };
 
-        // Feature #7: Video Filters
+        // Feature #7: Video Filters + Delay Echo
         filterBtn.onclick = () => {
             this._filterIndex = (this._filterIndex + 1) % this._filters.length;
             const f = this._filters[this._filterIndex];
             this.video.style.filter = f.css;
             filterBtn.title = `Filter: ${f.name}`;
+
+            // Handle delay echo clones
+            this._clearDelay();
+            if (f.delay) {
+                this._applyDelay(f.delay);
+            }
         };
 
         // Feature #11: Cinema Mode
@@ -580,6 +588,69 @@ export default class Player {
         this.video.style.transform = `scale(${this._zoomLevel}) translate(${this._panX / this._zoomLevel}px, ${this._panY / this._zoomLevel}px)`;
     }
 
+    // ── Delay Echo: clone video with time offset ──
+    _applyDelay(count) {
+        this._clearDelay();
+        const offsets = [0.15, 0.3, 0.5, 0.75, 1.0]; // seconds behind
+        const opacities = [0.6, 0.45, 0.3, 0.2, 0.15];
+        const hueShifts = [0, 15, 30, 50, 70]; // increasing hue shift
+
+        for (let i = 0; i < count; i++) {
+            const clone = this.video.cloneNode(false);
+            clone.removeAttribute('id');
+            clone.muted = true;
+            clone.loop = this.video.loop;
+            clone.playsInline = true;
+            clone.controls = false;
+            clone.className = 'delay-clone';
+            clone.style.cssText = `
+                position:absolute; top:0; left:0;
+                width:100%; height:100%;
+                object-fit:contain;
+                pointer-events:none;
+                opacity:${opacities[i]};
+                mix-blend-mode:screen;
+                filter:hue-rotate(${hueShifts[i]}deg) blur(${i * 0.5}px);
+                z-index:${i + 1};
+            `;
+            clone.src = this.video.src;
+            this.container.insertBefore(clone, this.controls);
+
+            // Sync clone with main video but offset in time
+            const offset = offsets[i];
+            let rafId;
+            const sync = () => {
+                if (!clone.parentNode) return;
+                const t = this.video.currentTime - offset;
+                const target = t < 0 ? (this.video.duration + t) : t;
+                // Only seek if drift is > 0.1s to avoid constant seeking
+                if (Math.abs(clone.currentTime - target) > 0.1) {
+                    clone.currentTime = target >= 0 ? target : 0;
+                }
+                // Match play/pause state
+                if (!this.video.paused && clone.paused) {
+                    clone.play().catch(() => { });
+                } else if (this.video.paused && !clone.paused) {
+                    clone.pause();
+                }
+                rafId = requestAnimationFrame(sync);
+            };
+            rafId = requestAnimationFrame(sync);
+            this._delayClones.push({ el: clone, rafId });
+        }
+    }
+
+    _clearDelay() {
+        this._delayClones.forEach(({ el, rafId }) => {
+            cancelAnimationFrame(rafId);
+            el.pause();
+            el.removeAttribute('src');
+            el.load();
+            if (el.parentNode) el.remove();
+        });
+        this._delayClones = [];
+    }
+
     formatTime(seconds) {
         if (!seconds || isNaN(seconds)) return '00:00';
         const h = Math.floor(seconds / 3600);
@@ -593,6 +664,7 @@ export default class Player {
 
     destroy() {
         this._saveProgress();
+        this._clearDelay();
         // Remove cinema overlay if active
         const cin = document.getElementById('cinema-overlay');
         if (cin) cin.remove();
