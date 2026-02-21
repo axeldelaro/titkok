@@ -23,4 +23,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Trigger initial route
     Router.handleRoute();
+
+    // Register PWA service worker
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js').catch(() => { });
+    }
 });

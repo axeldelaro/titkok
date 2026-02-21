@@ -1,0 +1,18 @@
+{
+    "name": "TitTok",
+    "short_name": "TitTok",
+    "description": "Video platform with hypnotic effects",
+    "start_url": "/",
+    "display": "standalone",
+    "orientation": "portrait",
+    "background_color": "#0a0a0f",
+    "theme_color": "#7c3aed",
+    "icons": [
+        {
+            "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='80' font-size='80'>🌀</text></svg>",
+            "sizes": "any",
+            "type": "image/svg+xml",
+            "purpose": "any maskable"
+        }
+    ]
+}
