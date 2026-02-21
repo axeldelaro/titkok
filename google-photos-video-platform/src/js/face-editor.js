@@ -93,9 +93,13 @@ const FaceEditor = {
         document.getElementById('fe-loading').style.display = 'flex';
         await this.init();
 
+        // Use a 1080px version to be faster
+        this._originalImageSrc = Gallery.getImageURL(imageObj, 1080);
+
         // Load image to canvas
         this._imgEl = new Image();
         this._imgEl.crossOrigin = "anonymous";
+
         this._imgEl.onload = async () => {
             this._canvas.width = this._imgEl.width;
             this._canvas.height = this._imgEl.height;
@@ -106,27 +110,35 @@ const FaceEditor = {
                 await faceMeshInstance.send({ image: this._imgEl });
             } catch (err) {
                 console.error('FaceMesh error:', err);
-                Toast.show('Could not detect face', 'error');
+                Toast.show('Could not detect face. Try another image.', 'error');
                 document.getElementById('fe-loading').style.display = 'none';
             }
         };
+
         this._imgEl.onerror = () => {
-            console.error("Image load failed, trying without crossOrigin caching...");
-            // Fallback for CORS caching issues: fetch as blob
-            fetch(this._originalImageSrc, { cache: 'reload' })
-                .then(res => res.blob())
+            console.error("Direct Image load failed, routing through proxy API...");
+
+            // For Google Photos URLs on static hosts like GitHub Pages,
+            // we use a public CORS proxy to load the image as a blob
+            // and bypass the strict origin canvas tainting.
+            const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(this._originalImageSrc)}`;
+
+            fetch(proxyUrl)
+                .then(res => {
+                    if (!res.ok) throw new Error('Proxy failed');
+                    return res.blob();
+                })
                 .then(blob => {
                     this._imgEl.onerror = null; // prevent infinite loop
                     this._imgEl.src = URL.createObjectURL(blob);
                 })
                 .catch(err => {
-                    console.error("Blob fetch failed", err);
-                    Toast.show('Error loading image.', 'error');
+                    console.error("Proxy fetch failed", err);
+                    Toast.show('Error loading image for editing.', 'error');
                     document.getElementById('fe-loading').style.display = 'none';
                 });
         };
-        // Use a 1080px version to be faster and potentially bypass exact cache
-        this._originalImageSrc = Gallery.getImageURL(imageObj, 1080);
+
         this._imgEl.src = this._originalImageSrc;
     },
 

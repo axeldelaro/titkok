@@ -36,6 +36,22 @@ export default defineConfig(({ mode }) => {
         server: {
             fs: {
                 allow: ['..']
+            },
+            proxy: {
+                '/api/proxy-media': {
+                    target: 'https://lh3.googleusercontent.com',
+                    changeOrigin: true,
+                    rewrite: (path) => {
+                        const urlParams = new URLSearchParams(path.split('?')[1]);
+                        const targetUrl = urlParams.get('url');
+                        if (targetUrl) {
+                            // Extract just the path part from lh3.googleusercontent.com/...
+                            const targetPath = new URL(targetUrl).pathname + new URL(targetUrl).search;
+                            return targetPath;
+                        }
+                        return path;
+                    }
+                }
             }
         },
         resolve: {
