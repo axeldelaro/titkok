@@ -13,10 +13,13 @@ import History from './history.js';
 import { Toast } from '../components/toast.js';
 import Modal from '../components/modal.js';
 import HypnoPopups, { getConfig, updateConfig } from './hypno.js';
+import VisualEditor from './visual-editor.js';
+import FaceEditor from './face-editor.js';
 
 const UI = {
     init: () => {
         const app = document.getElementById('app');
+        VisualEditor.init();
 
         // Render Shell
         app.innerHTML = '';
@@ -465,6 +468,9 @@ const UI = {
             container.appendChild(countBadge);
 
             container.appendChild(feed);
+            // Reapply visual editor filters + prefetch first 40 items
+            VisualEditor.reapply();
+            UI._prefetchMedia(videos, 0, 40);
 
         } catch (error) {
             console.error(error);
@@ -905,6 +911,17 @@ const UI = {
                 info.innerHTML = `<h3>🖼️ ${image.filename || 'Image'}</h3>`;
                 card.appendChild(info);
 
+                const actions = document.createElement('div');
+                actions.className = 'feed-actions';
+                actions.innerHTML = `
+                    <button class="btn-icon edit-btn" title="AI Retouch">🪄</button>
+                `;
+                actions.querySelector('.edit-btn').onclick = (e) => {
+                    e.stopPropagation();
+                    FaceEditor.open(image);
+                };
+                card.appendChild(actions);
+
                 feed.appendChild(card);
                 observer.observe(card);
             }
@@ -912,6 +929,10 @@ const UI = {
 
         container.appendChild(feed);
         HypnoPopups.attach(container);
+        // Reapply visual editor filters + prefetch
+        VisualEditor.reapply();
+        const allMedia = mixItems.map(item => item.data);
+        UI._prefetchMedia(allMedia, 0, 40);
     },
 
     renderGallery: async (container) => {
@@ -1076,6 +1097,17 @@ const UI = {
             info.className = 'feed-info-overlay';
             info.innerHTML = `<h3>${image.filename || 'Image'}</h3>`;
             card.appendChild(info);
+
+            const actions = document.createElement('div');
+            actions.className = 'feed-actions';
+            actions.innerHTML = `
+                <button class="btn-icon edit-btn" title="AI Retouch">🪄</button>
+            `;
+            actions.querySelector('.edit-btn').onclick = (e) => {
+                e.stopPropagation();
+                FaceEditor.open(image);
+            };
+            card.appendChild(actions);
 
             return card;
         };
@@ -1555,6 +1587,33 @@ const UI = {
         if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
         if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
         return date.toLocaleDateString();
+    },
+
+    // ── Prefetch next N media items to eliminate micro-loading ──
+    _prefetchMedia: (items, startIdx = 0, count = 40) => {
+        // Remove old prefetch links
+        document.querySelectorAll('link[data-prefetch]').forEach(l => l.remove());
+
+        const end = Math.min(startIdx + count, items.length);
+        for (let i = startIdx; i < end; i++) {
+            const item = items[i];
+            if (!item || !item.baseUrl) continue;
+
+            const link = document.createElement('link');
+            link.rel = 'prefetch';
+            link.setAttribute('data-prefetch', 'media');
+            link.as = item.mediaMetadata?.video ? 'video' : 'image';
+
+            // Videos use baseUrl=dv, images use baseUrl=w1080
+            if (item.mediaMetadata?.video) {
+                link.href = item._isLocal ? item.baseUrl : `${item.baseUrl}=dv`;
+            } else {
+                link.href = item._isLocal ? item.baseUrl : `${item.baseUrl}=w1080`;
+            }
+
+            document.head.appendChild(link);
+        }
+        console.log(`[Prefetch] Queued ${end - startIdx} items for background preload`);
     }
 };
 

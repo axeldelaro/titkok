@@ -1,5 +1,6 @@
 // Sidebar with Active Link (#30), History link, and Playlists (#39)
 import Router from '../js/router.js';
+import VisualEditor from '../js/visual-editor.js';
 
 export default function Sidebar() {
     const aside = document.createElement('aside');
@@ -11,6 +12,7 @@ export default function Sidebar() {
         { icon: '❤️', label: 'Liked Videos', path: '#/likes' },
         { icon: '🔀', label: 'Mix', path: '#/mix' },
         { icon: '🖼️', label: 'Gallery', path: '#/gallery' },
+        { icon: '🎨', label: 'Visual Editor', path: '#/visual-editor' },
         { icon: '📊', label: 'Stats', path: '#/stats' },
         { icon: '👤', label: 'Profile', path: '#/profile' },
     ];
@@ -27,6 +29,16 @@ export default function Sidebar() {
             `).join('')}
         </div>
     `;
+
+    // Intercept Visual Editor link — toggle panel instead of routing
+    const veLink = aside.querySelector('a[href="#/visual-editor"]');
+    if (veLink) {
+        veLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            VisualEditor.init();
+            VisualEditor.toggle();
+        });
+    }
 
     // Update active link on route change
     window.addEventListener('hashchange', () => {

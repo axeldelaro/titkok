@@ -598,85 +598,51 @@ export default class Player {
         }
     }
 
-    // ── Delay Echo: RAF-based frame ring buffer ──
-    _applyDelay(count) {
+    // ── Delay: single-canvas feedback loop for true video trail ──
+    _applyDelay(level) {
         this._clearDelay();
 
-        const BUFFER_SIZE = 90; // ~1.5s at 60fps
-        const OFFSETS = [100, 200, 400, 650, 1000]; // ms offset per layer
-        const OPACITIES = [0.55, 0.4, 0.3, 0.2, 0.12];
-        const frameBuffer = []; // ring buffer: { canvas, time }
+        // Lower fadeAlpha = longer trail (old frames fade slower)
+        const FADE_ALPHAS = [0.15, 0.08, 0.04, 0.02, 0.01];
+        const fadeAlpha = FADE_ALPHAS[level - 1];
 
-        // Create one overlay canvas per delay layer
-        const layers = [];
-        for (let i = 0; i < count; i++) {
-            const canvas = document.createElement('canvas');
-            canvas.style.cssText = `
-                position:absolute; top:0; left:0;
-                width:100%; height:100%;
-                pointer-events:none;
-                opacity:${OPACITIES[i]};
-                mix-blend-mode:screen;
-                z-index:${i + 1};
-            `;
-            this.container.insertBefore(canvas, this.controls);
-            layers.push({ canvas, ctx: canvas.getContext('2d') });
-        }
+        const canvas = document.createElement('canvas');
+        canvas.style.cssText = `
+            position:absolute; top:0; left:0;
+            width:100%; height:100%;
+            pointer-events:none;
+            z-index:2;
+        `;
+        this.container.insertBefore(canvas, this.controls);
+        const ctx = canvas.getContext('2d', { willReadFrequently: false });
 
         let rafId;
-        const vw = () => this.video.videoWidth || 640;
-        const vh = () => this.video.videoHeight || 360;
-
         const tick = () => {
-            if (!layers[0].canvas.parentNode) return;
+            if (!canvas.parentNode) return;
             rafId = requestAnimationFrame(tick);
 
             if (this.video.paused || this.video.readyState < 2) return;
 
-            const w = vw(), h = vh();
-
-            // Capture current frame into an offscreen canvas
-            const snap = document.createElement('canvas');
-            snap.width = w;
-            snap.height = h;
-            snap.getContext('2d').drawImage(this.video, 0, 0, w, h);
-
-            const now = performance.now();
-            frameBuffer.push({ canvas: snap, time: now });
-
-            // Trim old frames beyond buffer
-            while (frameBuffer.length > BUFFER_SIZE) {
-                frameBuffer.shift();
+            const w = this.video.videoWidth || 640;
+            const h = this.video.videoHeight || 360;
+            if (canvas.width !== w || canvas.height !== h) {
+                canvas.width = w;
+                canvas.height = h;
             }
 
-            // Draw each delay layer from the appropriate past frame
-            for (let i = 0; i < count; i++) {
-                const layer = layers[i];
-                if (layer.canvas.width !== w || layer.canvas.height !== h) {
-                    layer.canvas.width = w;
-                    layer.canvas.height = h;
-                }
+            // Fade: semi-transparent black rect dims old frames
+            ctx.fillStyle = `rgba(0, 0, 0, ${fadeAlpha})`;
+            ctx.fillRect(0, 0, w, h);
 
-                const targetTime = now - OFFSETS[i];
-                // Find the closest frame to the target time
-                let best = null;
-                for (let j = frameBuffer.length - 1; j >= 0; j--) {
-                    if (frameBuffer[j].time <= targetTime) {
-                        best = frameBuffer[j];
-                        break;
-                    }
-                }
-                if (best) {
-                    layer.ctx.clearRect(0, 0, w, h);
-                    layer.ctx.drawImage(best.canvas, 0, 0);
-                }
-            }
+            // Draw current frame on top — it accumulates over fading old ones
+            ctx.globalAlpha = 0.6;
+            ctx.drawImage(this.video, 0, 0, w, h);
+            ctx.globalAlpha = 1.0;
         };
 
         rafId = requestAnimationFrame(tick);
-        this._delayLayers = layers.map(l => ({ el: l.canvas }));
+        this._delayLayers = [{ el: canvas }];
         this._delayRaf = rafId;
-        this._delayBuffer = frameBuffer;
     }
 
     _clearDelay() {
@@ -690,7 +656,6 @@ export default class Player {
             });
         }
         this._delayLayers = [];
-        this._delayBuffer = null;
     }
 
     formatTime(seconds) {
