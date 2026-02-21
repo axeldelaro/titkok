@@ -26,7 +26,12 @@ export default class Player {
             { name: 'Warm', css: 'sepia(0.4) saturate(1.5) brightness(1.1)' },
             { name: 'Cool', css: 'hue-rotate(180deg) saturate(1.3)' },
             { name: 'Vintage', css: 'sepia(0.6) contrast(1.1) brightness(0.9)' },
-            { name: 'Negative', css: 'invert(1) contrast(1.3)' }
+            { name: 'Negative', css: 'invert(1) contrast(1.3)' },
+            { name: 'Ghost 1', css: 'brightness(1.3) contrast(0.8) blur(0.5px)' },
+            { name: 'Ghost 2', css: 'brightness(1.5) contrast(0.6) blur(1px) saturate(0.7)' },
+            { name: 'Ghost 3', css: 'brightness(1.8) contrast(0.5) blur(2px) saturate(0.5)' },
+            { name: 'Ghost 4', css: 'brightness(2) contrast(0.4) blur(3px) saturate(0.3) hue-rotate(30deg)' },
+            { name: 'Ghost 5', css: 'brightness(2.5) contrast(0.3) blur(4px) grayscale(0.6)' }
         ];
         // Feature: Cinema Mode (#11)
         this._cinemaMode = false;
