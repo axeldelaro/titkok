@@ -262,13 +262,37 @@ export default class Player {
     }
 
     activate() {
-        // FIX: video.src est égal à window.location.href quand il n'est pas défini (comportement navigateur).
-        // On teste `_started` pour savoir si startPlayback a déjà été appelé.
-        if (!this._started) {
-            this.startPlayback();
-        } else {
+        if (this._started) {
+            // Déjà joué au moins une fois → reprendre
             this.video.play().catch(() => { });
+        } else if (this._preloaded) {
+            // Préchargé silencieusement → marquer démarré et lancer play()
+            // sans réassigner src pour conserver le buffer déjà chargé
+            this._started = true;
+            this.hideLoading();
+            this.video.play().catch(() => { });
+        } else {
+            // Premier démarrage
+            this.startPlayback();
         }
+    }
+
+    // ── Préchargement silencieux ───────────────────────────────
+    // Lance le buffering de la vidéo sans la jouer.
+    // Appelé sur les N+1 / N+2 cards pendant la lecture en cours.
+    preload() {
+        if (this._started || this._preloaded) return; // déjà chargée
+
+        // Respecter les préférences réseau
+        const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+        if (conn?.saveData || ['slow-2g', '2g'].includes(conn?.effectiveType)) return;
+
+        this._preloaded = true;
+        const src = this.isBlob ? this.videoUrl : `${this.videoUrl}=dv`;
+        this.video.src = src;
+        this.video.preload = 'auto';
+        this.video.load();
+        console.log('[Player] Preloading next video in background');
     }
 
     deactivate() {

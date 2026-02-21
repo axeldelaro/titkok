@@ -344,13 +344,34 @@ const UI = {
                 return h > w && w > 0;
             };
 
-            // Lazy-load observer — only activate visible videos
+            // Nombre de vidéos à précharger en avance
+            const PRELOAD_AHEAD = (() => {
+                const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+                if (conn?.saveData || conn?.effectiveType === '2g') return 0;
+                if (conn?.effectiveType === '3g') return 1;
+                return 2; // 4G / WiFi : précharger les 2 suivantes
+            })();
+
+            // Lazy-load observer — active/désactive les players visibles
+            // + précharge en arrière-plan les N suivantes
             const observer = new IntersectionObserver((entries) => {
                 entries.forEach(entry => {
-                    const player = entry.target._player;
+                    const card = entry.target;
+                    const player = card._player;
                     if (!player) return;
+
                     if (entry.isIntersecting) {
                         player.activate();
+
+                        // ── Look-ahead : précharger les vidéos suivantes ──
+                        if (PRELOAD_AHEAD > 0) {
+                            const allCards = [...feed.querySelectorAll('.video-card-feed')];
+                            const idx = allCards.indexOf(card);
+                            for (let offset = 1; offset <= PRELOAD_AHEAD; offset++) {
+                                const nextCard = allCards[idx + offset];
+                                if (nextCard?._player) nextCard._player.preload();
+                            }
+                        }
                     } else {
                         player.deactivate();
                     }
