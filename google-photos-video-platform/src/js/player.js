@@ -364,10 +364,10 @@ export default class Player {
             this.video.currentTime = pos * this.video.duration;
         };
 
-        // Fullscreen
+        // Fullscreen — fullscreen the whole page so user can still scroll
         fullscreenBtn.onclick = () => {
             if (!document.fullscreenElement) {
-                this.container.requestFullscreen().catch(() => { });
+                document.documentElement.requestFullscreen().catch(() => { });
             } else {
                 document.exitFullscreen();
             }

@@ -1,7 +1,6 @@
 /* ── Hypnotic Popup: SUBLIMINAL MODE ──
- * 95% Ghostly fleeting images (visual only)
- * 5% Mini-games (interactive)
- * + 10 Chaos Effects (Text, Glitch, Spiral, etc.)
+ * Pure visual chaos — fleeting subliminal images + 46 visual effects
+ * No mini-games, only passive visual hypnosis
  */
 import Gallery from './gallery.js';
 import { Toast } from '../components/toast.js';
@@ -14,22 +13,59 @@ const MAX_POPUPS = 25;
 
 // Load config from localStorage or default
 const DEFAULT_CONFIG = {
+    // ── Visual / Chill ──
     scanlines: true,
     rgbShift: true,
-    kaleidoscope: false, // Intensive
     pixelate: true,
-    liquidWarp: false, // Intensive
-    strobe: true,
-    doubleVision: true,
-    tunnel: true,
-    verticalStretch: true,
-    colorCycle: false, // Can be annoying
-    vortex: false, // Motion sickness warning
     textSubliminal: true,
-    glitch: true,
     breathe: true,
     tilt: true,
-    mirror: true
+    mirror: true,
+    colorCycle: false,
+    fadePulse: true,
+    filmGrain: true,
+    sepiaFlash: true,
+    // ── Motion / Transform ──
+    tunnel: true,
+    doubleVision: true,
+    verticalStretch: true,
+    glitch: true,
+    zoomPulse: true,
+    skewHorizontal: true,
+    skewVertical: true,
+    wobble: true,
+    heartbeat: true,
+    earthquake: false,
+    drunkMode: false,
+    // ── Color / Filter ──
+    negativeFlash: true,
+    thermalVision: true,
+    nightVision: true,
+    redChannel: true,
+    blueChannel: true,
+    greenChannel: true,
+    solarize: true,
+    colorDrain: true,
+    cyberpunk: true,
+    bloodMoon: false,
+    retroWave: true,
+    // ── Overlay / Complex ──
+    strobe: true,
+    hologram: true,
+    oldTV: true,
+    subliminalFlash: true,
+    matrixRain: true,
+    speedLines: true,
+    datamosh: true,
+    ghostTrail: true,
+    fishEye: true,
+    // ── Extreme (off by default) ──
+    kaleidoscope: false,
+    liquidWarp: false,
+    vortex: false,
+    blackout: false,
+    whiteout: false,
+    chromaStorm: false,
 };
 
 let config = JSON.parse(localStorage.getItem('hypnoConfig') || JSON.stringify(DEFAULT_CONFIG));
@@ -42,23 +78,24 @@ export const updateConfig = (newConfig) => {
 
 export const getConfig = () => config;
 
-// ── Chaos Engine ──
-const WORDS = ["OBEY", "CONSUME", "WATCH", "SUBMIT", "SCROLL", "SLEEP", "AWAKE", "NO THOUGHT", "TITKOK", "LOOK"];
+// ── Subliminal Words ──
+const WORDS = ["OBEY", "CONSUME", "WATCH", "SUBMIT", "SCROLL", "SLEEP", "AWAKE", "NO THOUGHT", "TITKOK", "LOOK", "DEEPER", "RELAX", "FOCUS", "SURRENDER", "FOLLOW", "ABSORB"];
+
 let chaosTimers = [];
 
+// ── Chaos Engine: 46 effects ──
 const ChaosEngine = {
     start() {
         if (!overlayContainer) return;
-
-        // 1. Cursor Ghost
         document.addEventListener('mousemove', this.onMove);
         document.addEventListener('touchmove', this.onMove);
 
-        // 2. Persistent layers based on config
+        // Persistent layers
         if (config.scanlines) this.addLayer(overlayContainer, 'hypno-scanlines');
         if (config.tunnel) this.addLayer(overlayContainer, 'hypno-tunnel');
+        if (config.filmGrain) this.addLayer(overlayContainer, 'hypno-film-grain');
+        if (config.speedLines) this.addLayer(overlayContainer, 'hypno-speed-lines');
 
-        // Start random loops
         this.scheduleEffect();
     },
 
@@ -68,19 +105,27 @@ const ChaosEngine = {
         chaosTimers.forEach(t => clearTimeout(t));
         chaosTimers = [];
 
-        if (overlayContainer) {
-            overlayContainer.innerHTML = ''; // Clear all layers
-        }
+        if (overlayContainer) overlayContainer.innerHTML = '';
 
-        // Clean up body classes
-        document.body.classList.remove(
+        // Remove ALL body effect classes
+        const allClasses = [
             'hypno-breathe', 'hypno-glitch', 'hypno-invert', 'hypno-shake',
             'hypno-blur', 'hypno-tilt', 'hypno-tilt-reverse',
             'hypno-mirror-x', 'hypno-mirror-y',
             'hypno-liquid', 'hypno-strobe', 'hypno-double-vision',
             'hypno-stretch', 'hypno-color-cycle', 'hypno-vortex',
-            'hypno-rgb-shift', 'hypno-pixelate'
-        );
+            'hypno-rgb-shift', 'hypno-pixelate',
+            'hypno-zoom-pulse', 'hypno-skew-x', 'hypno-skew-y',
+            'hypno-negative-flash', 'hypno-wobble', 'hypno-fade-pulse',
+            'hypno-color-drain', 'hypno-red-channel', 'hypno-blue-channel',
+            'hypno-green-channel', 'hypno-sepia-flash', 'hypno-thermal',
+            'hypno-night-vision', 'hypno-heartbeat', 'hypno-earthquake',
+            'hypno-drunk', 'hypno-solarize', 'hypno-hologram', 'hypno-old-tv',
+            'hypno-cyberpunk', 'hypno-blood-moon', 'hypno-retro-wave',
+            'hypno-datamosh', 'hypno-ghost-trail', 'hypno-fish-eye',
+            'hypno-blackout', 'hypno-whiteout', 'hypno-chroma-storm'
+        ];
+        document.body.classList.remove(...allClasses);
     },
 
     addLayer(container, className) {
@@ -96,7 +141,7 @@ const ChaosEngine = {
     },
 
     onMove(e) {
-        if (Math.random() > 0.3) return; // Throttling
+        if (Math.random() > 0.3) return;
         const pt = e.touches ? e.touches[0] : e;
         const ghost = document.createElement('div');
         ghost.className = 'hypno-cursor-ghost';
@@ -109,7 +154,7 @@ const ChaosEngine = {
 
     scheduleEffect() {
         if (!hypnoActive) return;
-        const delay = 500 + Math.random() * 2000;
+        const delay = 300 + Math.random() * 1500;
         const id = setTimeout(() => {
             this.triggerRandomEffect();
             this.scheduleEffect();
@@ -117,90 +162,238 @@ const ChaosEngine = {
         chaosTimers.push(id);
     },
 
+    _timedClass(cls, duration) {
+        document.body.classList.add(cls);
+        setTimeout(() => document.body.classList.remove(cls), duration);
+    },
+
+    _timedOverlay(cls, duration) {
+        if (!overlayContainer) return;
+        const el = this.addLayer(overlayContainer, cls);
+        if (el) setTimeout(() => el.remove(), duration);
+    },
+
     triggerRandomEffect() {
         if (!overlayContainer) return;
-        const roll = Math.random();
 
-        // 3. Subliminal Text
-        if (config.textSubliminal && roll < 0.2) {
-            const word = WORDS[Math.floor(Math.random() * WORDS.length)];
-            const el = document.createElement('div');
-            el.className = 'hypno-subliminal-text';
-            el.innerText = word;
-            el.style.pointerEvents = 'none';
-            overlayContainer.appendChild(el);
-            setTimeout(() => el.remove(), 200);
-        }
+        // Collect all enabled effects
+        const pool = [];
 
-        // 4. Glitch
-        else if (config.glitch && roll < 0.3) {
-            document.body.classList.add('hypno-glitch');
-            setTimeout(() => document.body.classList.remove('hypno-glitch'), 200 + Math.random() * 400);
-        }
+        // ── Visual / Chill ──
+        if (config.textSubliminal) pool.push('textSubliminal');
+        if (config.rgbShift) pool.push('rgbShift');
+        if (config.pixelate) pool.push('pixelate');
+        if (config.breathe) pool.push('breathe');
+        if (config.tilt) pool.push('tilt');
+        if (config.mirror) pool.push('mirror');
+        if (config.colorCycle) pool.push('colorCycle');
+        if (config.fadePulse) pool.push('fadePulse');
+        if (config.sepiaFlash) pool.push('sepiaFlash');
 
-        // 5. RGB Shift (Toggle)
-        else if (config.rgbShift && roll < 0.4) {
-            document.body.classList.toggle('hypno-rgb-shift');
-            if (document.body.classList.contains('hypno-rgb-shift')) {
-                setTimeout(() => document.body.classList.remove('hypno-rgb-shift'), 3000);
+        // ── Motion / Transform ──
+        if (config.doubleVision) pool.push('doubleVision');
+        if (config.verticalStretch) pool.push('verticalStretch');
+        if (config.glitch) pool.push('glitch');
+        if (config.zoomPulse) pool.push('zoomPulse');
+        if (config.skewHorizontal) pool.push('skewHorizontal');
+        if (config.skewVertical) pool.push('skewVertical');
+        if (config.wobble) pool.push('wobble');
+        if (config.heartbeat) pool.push('heartbeat');
+        if (config.earthquake) pool.push('earthquake');
+        if (config.drunkMode) pool.push('drunkMode');
+
+        // ── Color / Filter ──
+        if (config.negativeFlash) pool.push('negativeFlash');
+        if (config.thermalVision) pool.push('thermalVision');
+        if (config.nightVision) pool.push('nightVision');
+        if (config.redChannel) pool.push('redChannel');
+        if (config.blueChannel) pool.push('blueChannel');
+        if (config.greenChannel) pool.push('greenChannel');
+        if (config.solarize) pool.push('solarize');
+        if (config.colorDrain) pool.push('colorDrain');
+        if (config.cyberpunk) pool.push('cyberpunk');
+        if (config.bloodMoon) pool.push('bloodMoon');
+        if (config.retroWave) pool.push('retroWave');
+
+        // ── Overlay / Complex ──
+        if (config.strobe) pool.push('strobe');
+        if (config.hologram) pool.push('hologram');
+        if (config.oldTV) pool.push('oldTV');
+        if (config.subliminalFlash) pool.push('subliminalFlash');
+        if (config.matrixRain) pool.push('matrixRain');
+        if (config.datamosh) pool.push('datamosh');
+        if (config.ghostTrail) pool.push('ghostTrail');
+        if (config.fishEye) pool.push('fishEye');
+
+        // ── Extreme ──
+        if (config.kaleidoscope) pool.push('kaleidoscope');
+        if (config.liquidWarp) pool.push('liquidWarp');
+        if (config.vortex) pool.push('vortex');
+        if (config.blackout) pool.push('blackout');
+        if (config.whiteout) pool.push('whiteout');
+        if (config.chromaStorm) pool.push('chromaStorm');
+
+        if (pool.length === 0) return;
+
+        const effect = pool[Math.floor(Math.random() * pool.length)];
+        this._executeEffect(effect);
+    },
+
+    _executeEffect(effect) {
+        switch (effect) {
+            // ── Visual / Chill ──
+            case 'textSubliminal': {
+                const word = WORDS[Math.floor(Math.random() * WORDS.length)];
+                const el = document.createElement('div');
+                el.className = 'hypno-subliminal-text';
+                el.innerText = word;
+                el.style.pointerEvents = 'none';
+                overlayContainer.appendChild(el);
+                setTimeout(() => el.remove(), 200);
+                break;
             }
-        }
-
-        // 6. Strobe (Quick flash)
-        else if (config.strobe && roll < 0.45) {
-            document.body.classList.add('hypno-strobe');
-            setTimeout(() => document.body.classList.remove('hypno-strobe'), 500);
-        }
-
-        // 7. Liquid Warp
-        else if (config.liquidWarp && roll < 0.5) {
-            document.body.classList.add('hypno-liquid');
-            setTimeout(() => document.body.classList.remove('hypno-liquid'), 4000);
-        }
-
-        // 8. Double Vision
-        else if (config.doubleVision && roll < 0.6) {
-            document.body.classList.toggle('hypno-double-vision');
-        }
-
-        // 9. Pixelate
-        else if (config.pixelate && roll < 0.65) {
-            document.body.classList.add('hypno-pixelate');
-            setTimeout(() => document.body.classList.remove('hypno-pixelate'), 1000);
-        }
-
-        // 10. Vertical Stretch
-        else if (config.verticalStretch && roll < 0.75) {
-            document.body.classList.add('hypno-stretch');
-            setTimeout(() => document.body.classList.remove('hypno-stretch'), 2000);
-        }
-
-        // 11. Vortex (Rare)
-        else if (config.vortex && roll < 0.8) {
-            document.body.classList.add('hypno-vortex');
-            setTimeout(() => document.body.classList.remove('hypno-vortex'), 3000);
-        }
-
-        // 12. Mirror Mode
-        else if (config.mirror && roll < 0.85) {
-            if (Math.random() > 0.5) {
-                const cls = Math.random() > 0.5 ? 'hypno-mirror-x' : 'hypno-mirror-y';
-                document.body.classList.add(cls);
-                setTimeout(() => document.body.classList.remove(cls), 3000);
-            }
-        }
-
-        // 13. Breathe & Tilt (Persistent)
-        else {
-            if (config.breathe) document.body.classList.toggle('hypno-breathe', Math.random() > 0.3);
-            if (config.colorCycle) document.body.classList.toggle('hypno-color-cycle', Math.random() > 0.8);
-
-            if (config.tilt) {
-                const tilt = Math.random();
+            case 'rgbShift':
+                this._timedClass('hypno-rgb-shift', 2000 + Math.random() * 2000);
+                break;
+            case 'pixelate':
+                this._timedClass('hypno-pixelate', 800 + Math.random() * 800);
+                break;
+            case 'breathe':
+                document.body.classList.toggle('hypno-breathe', Math.random() > 0.3);
+                break;
+            case 'tilt': {
                 document.body.classList.remove('hypno-tilt', 'hypno-tilt-reverse');
-                if (tilt > 0.7) document.body.classList.add('hypno-tilt');
-                else if (tilt > 0.85) document.body.classList.add('hypno-tilt-reverse');
+                const cls = Math.random() > 0.5 ? 'hypno-tilt' : 'hypno-tilt-reverse';
+                this._timedClass(cls, 2000 + Math.random() * 2000);
+                break;
             }
+            case 'mirror': {
+                const cls = Math.random() > 0.5 ? 'hypno-mirror-x' : 'hypno-mirror-y';
+                this._timedClass(cls, 2000 + Math.random() * 2000);
+                break;
+            }
+            case 'colorCycle':
+                document.body.classList.toggle('hypno-color-cycle', Math.random() > 0.5);
+                break;
+            case 'fadePulse':
+                this._timedClass('hypno-fade-pulse', 3000);
+                break;
+            case 'sepiaFlash':
+                this._timedClass('hypno-sepia-flash', 600);
+                break;
+
+            // ── Motion / Transform ──
+            case 'doubleVision':
+                document.body.classList.toggle('hypno-double-vision');
+                break;
+            case 'verticalStretch':
+                this._timedClass('hypno-stretch', 1500 + Math.random() * 1500);
+                break;
+            case 'glitch':
+                this._timedClass('hypno-glitch', 200 + Math.random() * 400);
+                break;
+            case 'zoomPulse':
+                this._timedClass('hypno-zoom-pulse', 2000);
+                break;
+            case 'skewHorizontal':
+                this._timedClass('hypno-skew-x', 1500);
+                break;
+            case 'skewVertical':
+                this._timedClass('hypno-skew-y', 1500);
+                break;
+            case 'wobble':
+                this._timedClass('hypno-wobble', 2000);
+                break;
+            case 'heartbeat':
+                this._timedClass('hypno-heartbeat', 2000);
+                break;
+            case 'earthquake':
+                this._timedClass('hypno-earthquake', 1000 + Math.random() * 1000);
+                break;
+            case 'drunkMode':
+                this._timedClass('hypno-drunk', 3000 + Math.random() * 2000);
+                break;
+
+            // ── Color / Filter ──
+            case 'negativeFlash':
+                this._timedClass('hypno-negative-flash', 300);
+                break;
+            case 'thermalVision':
+                this._timedClass('hypno-thermal', 2000 + Math.random() * 2000);
+                break;
+            case 'nightVision':
+                this._timedClass('hypno-night-vision', 3000);
+                break;
+            case 'redChannel':
+                this._timedClass('hypno-red-channel', 2000);
+                break;
+            case 'blueChannel':
+                this._timedClass('hypno-blue-channel', 2000);
+                break;
+            case 'greenChannel':
+                this._timedClass('hypno-green-channel', 2000);
+                break;
+            case 'solarize':
+                this._timedClass('hypno-solarize', 1500);
+                break;
+            case 'colorDrain':
+                this._timedClass('hypno-color-drain', 3000);
+                break;
+            case 'cyberpunk':
+                this._timedClass('hypno-cyberpunk', 2500);
+                break;
+            case 'bloodMoon':
+                this._timedClass('hypno-blood-moon', 3000);
+                break;
+            case 'retroWave':
+                this._timedClass('hypno-retro-wave', 3000);
+                break;
+
+            // ── Overlay / Complex ──
+            case 'strobe':
+                this._timedClass('hypno-strobe', 400);
+                break;
+            case 'hologram':
+                this._timedClass('hypno-hologram', 2500);
+                break;
+            case 'oldTV':
+                this._timedClass('hypno-old-tv', 2000);
+                break;
+            case 'subliminalFlash':
+                this._timedClass('hypno-subliminal-flash', 100);
+                break;
+            case 'matrixRain':
+                this._timedOverlay('hypno-matrix-rain', 4000);
+                break;
+            case 'datamosh':
+                this._timedClass('hypno-datamosh', 800);
+                break;
+            case 'ghostTrail':
+                this._timedClass('hypno-ghost-trail', 3000);
+                break;
+            case 'fishEye':
+                this._timedClass('hypno-fish-eye', 2000);
+                break;
+
+            // ── Extreme ──
+            case 'kaleidoscope':
+                this._timedOverlay('hypno-kaleido-layer', 4000);
+                break;
+            case 'liquidWarp':
+                this._timedClass('hypno-liquid', 3000);
+                break;
+            case 'vortex':
+                this._timedClass('hypno-vortex', 2500);
+                break;
+            case 'blackout':
+                this._timedClass('hypno-blackout', 500 + Math.random() * 1000);
+                break;
+            case 'whiteout':
+                this._timedClass('hypno-whiteout', 300 + Math.random() * 500);
+                break;
+            case 'chromaStorm':
+                this._timedClass('hypno-chroma-storm', 2000);
+                break;
         }
     }
 };
@@ -210,8 +403,6 @@ const stop = () => {
     hypnoActive = false;
     hypnoTimers.forEach(id => clearTimeout(id));
     hypnoTimers = [];
-
-    // Stop Chaos
     ChaosEngine.stop();
 
     if (overlayContainer) {
@@ -220,21 +411,7 @@ const stop = () => {
         overlayContainer = null;
     }
     activePopups.clear();
-
-    // Remove active state from any toggle buttons
     document.querySelectorAll('.hypno-toggle-btn').forEach(btn => btn.classList.remove('active'));
-};
-
-const dismissPopup = (popup, isGame = true) => {
-    if (popup._cleanup) popup._cleanup();
-    activePopups.delete(popup);
-
-    if (isGame) {
-        popup.classList.add('hypno-solved');
-        setTimeout(() => popup.remove(), 600);
-    } else {
-        popup.remove();
-    }
 };
 
 const scheduleSpawn = (delay) => {
@@ -243,198 +420,7 @@ const scheduleSpawn = (delay) => {
     hypnoTimers.push(id);
 };
 
-// ── MINI-GAMES ──
-const runGame = (popup, img, type) => {
-    // 1. TAP (20-40)
-    if (type === 0) {
-        const needed = 20 + Math.floor(Math.random() * 21);
-        let taps = 0;
-        const counter = document.createElement('div');
-        counter.className = 'hypno-counter';
-        counter.innerText = `👆 0/${needed}`;
-        popup.appendChild(counter);
-        const bar = document.createElement('div');
-        bar.className = 'hypno-progress-bar';
-        const fill = document.createElement('div');
-        fill.className = 'hypno-progress-fill';
-        bar.appendChild(fill);
-        popup.appendChild(bar);
-
-        const onTap = (e) => {
-            e.preventDefault(); e.stopPropagation();
-            taps++;
-            fill.style.width = Math.min(100, (taps / needed) * 100) + '%';
-            counter.innerText = `👆 ${taps}/${needed}`;
-            popup.style.transform = `scale(${1 + Math.random() * 0.1})`;
-            if (taps >= needed) dismissPopup(popup);
-        };
-        popup.addEventListener('click', onTap);
-        popup.addEventListener('touchend', onTap);
-    }
-    // 2. HOLD (4s)
-    else if (type === 1) {
-        img.style.filter = 'blur(20px) brightness(0.4)';
-        const label = document.createElement('div');
-        label.className = 'hypno-counter';
-        label.innerText = '✋ Hold 4s';
-        popup.appendChild(label);
-        const bar = document.createElement('div');
-        bar.className = 'hypno-progress-bar';
-        const fill = document.createElement('div');
-        fill.className = 'hypno-progress-fill hold-fill';
-        bar.appendChild(fill);
-        popup.appendChild(bar);
-
-        let progress = 0, holdInterval;
-        const start = (e) => {
-            e.preventDefault(); e.stopPropagation();
-            holdInterval = setInterval(() => {
-                progress += 1.5;
-                fill.style.width = Math.min(100, progress) + '%';
-                img.style.filter = `blur(${Math.max(0, 20 - progress * 0.2)}px)`;
-                if (progress >= 100) { clearInterval(holdInterval); dismissPopup(popup); }
-            }, 60);
-        };
-        const end = () => {
-            clearInterval(holdInterval);
-            if (progress < 100 && progress > 0) {
-                progress = Math.max(0, progress - 30);
-                fill.style.width = progress + '%';
-                img.style.filter = `blur(${Math.max(0, 20 - progress * 0.2)}px) brightness(0.4)`;
-            }
-        };
-        popup.addEventListener('mousedown', start);
-        popup.addEventListener('touchstart', start, { passive: false });
-        popup.addEventListener('mouseup', end);
-        popup.addEventListener('touchend', end);
-        popup._cleanup = () => clearInterval(holdInterval);
-    }
-    // 3. CATCH (6x)
-    else if (type === 2) {
-        let catches = 0;
-        const needed = 6;
-        const label = document.createElement('div');
-        label.className = 'hypno-counter';
-        label.innerText = `🎯 0/${needed}`;
-        popup.appendChild(label);
-
-        let canDodge = true;
-        let lastDodge = 0;
-
-        const dodge = () => {
-            const now = Date.now();
-            if (!canDodge || now - lastDodge < 400) return;
-            lastDodge = now;
-
-            const maxX = Math.max(0, window.innerWidth - popup.offsetWidth - 10);
-            const maxY = Math.max(0, window.innerHeight - popup.offsetHeight - 10);
-
-            if (Math.random() > 0.3) {
-                popup.style.left = Math.max(10, Math.min(maxX, Math.random() * maxX)) + 'px';
-                popup.style.top = Math.max(10, Math.min(maxY, Math.random() * maxY)) + 'px';
-            }
-        };
-
-        const onTouchStart = (e) => {
-            if (canDodge) {
-                dodge();
-            }
-        };
-
-        const onAttempt = (e) => {
-            e.preventDefault(); e.stopPropagation();
-
-            if (Math.random() > 0.3) {
-                dodge();
-                return;
-            }
-
-            catches++;
-            label.innerText = `🎯 ${catches}/${needed}`;
-            canDodge = false;
-            popup.style.transform = 'scale(0.95)';
-            popup.style.filter = 'brightness(1.5)';
-
-            setTimeout(() => {
-                if (catches >= needed) dismissPopup(popup);
-                else {
-                    canDodge = true;
-                    popup.style.transform = '';
-                    popup.style.filter = '';
-                    dodge();
-                }
-            }, 200);
-        };
-
-        popup.addEventListener('mousedown', onAttempt);
-        popup.addEventListener('touchstart', onTouchStart, { passive: false });
-        popup.addEventListener('click', onAttempt);
-    }
-    // 4. SWIPE (300px)
-    else {
-        const label = document.createElement('div');
-        label.className = 'hypno-counter';
-        label.innerText = '👉 Drag Away';
-        popup.appendChild(label);
-        let startX, startY, dragging = false;
-
-        const down = (e) => {
-            dragging = true;
-            const pt = e.touches ? e.touches[0] : e;
-            startX = pt.clientX; startY = pt.clientY;
-            popup.style.zIndex = 10000;
-            popup.style.transition = 'none';
-        };
-
-        const move = (e) => {
-            if (!dragging) return;
-            e.preventDefault();
-            const pt = e.touches ? e.touches[0] : e;
-            const dx = pt.clientX - startX;
-            const dy = pt.clientY - startY;
-            popup.style.transform = `translate(${dx}px, ${dy}px)`;
-
-            if (Math.hypot(dx, dy) > 250) {
-                popup.style.opacity = 0.5;
-                label.innerText = 'Release!';
-            }
-        };
-
-        const up = (e) => {
-            if (!dragging) return;
-            dragging = false;
-            const pt = e.changedTouches ? e.changedTouches[0] : e;
-            const dx = pt.clientX - startX;
-            const dy = pt.clientY - startY;
-
-            if (Math.hypot(dx, dy) > 250) {
-                dismissPopup(popup);
-            } else {
-                popup.style.transition = 'transform 0.3s ease';
-                popup.style.transform = 'translate(0, 0)';
-                popup.style.opacity = 1;
-                label.innerText = '👉 Drag Away';
-            }
-            popup.style.zIndex = '';
-        };
-
-        popup.addEventListener('mousedown', down);
-        popup.addEventListener('touchstart', down, { passive: false });
-        document.addEventListener('mousemove', move);
-        document.addEventListener('touchmove', move, { passive: false });
-        document.addEventListener('mouseup', up);
-        document.addEventListener('touchend', up);
-
-        popup._cleanup = () => {
-            document.removeEventListener('mousemove', move);
-            document.removeEventListener('touchmove', move);
-            document.removeEventListener('mouseup', up);
-            document.removeEventListener('touchend', up);
-        };
-    }
-};
-
-// ── SPAWN LOGIC ──
+// ── SPAWN LOGIC (visual only, no games) ──
 function spawnPopup() {
     if (!hypnoActive || !overlayContainer) return;
 
@@ -445,9 +431,8 @@ function spawnPopup() {
     }
 
     if (activePopups.size >= MAX_POPUPS) {
-        const it = activePopups.values();
-        const first = it.next().value;
-        if (first && !first.classList.contains('hypno-game')) {
+        const first = activePopups.values().next().value;
+        if (first) {
             first.remove();
             activePopups.delete(first);
         }
@@ -455,7 +440,7 @@ function spawnPopup() {
 
     const randImg = allImages[Math.floor(Math.random() * allImages.length)];
     const popup = document.createElement('div');
-    popup.className = 'hypno-popup';
+    popup.className = 'hypno-popup hypno-fleet';
 
     const img = document.createElement('img');
     img.src = Gallery.getImageURL(randImg, 400);
@@ -463,63 +448,40 @@ function spawnPopup() {
     img.style.pointerEvents = 'none';
     popup.appendChild(img);
 
-    const isGame = Math.random() < 0.05; // 5% chance of game
-
     const maxW = window.innerWidth;
     const maxH = window.innerHeight;
-    const size = isGame
-        ? Math.min(150 + Math.random() * 100, maxW - 20)
-        : Math.min(100 + Math.random() * 250, maxW - 20);
+    const size = Math.min(100 + Math.random() * 250, maxW - 20);
     const x = Math.max(10, Math.min(Math.random() * (maxW - size), maxW - size - 10));
     const y = Math.max(10, Math.min(Math.random() * (maxH - size), maxH - size - 10));
 
-    if (!isGame) {
-        // FLEET
-        popup.classList.add('hypno-fleet');
-        popup.style.cssText = `
-            left: ${x}px; top: ${y}px;
-            width: ${size}px; height: ${size}px;
-            opacity: 0;
-            transform: scale(${0.5 + Math.random()}) rotate(${Math.random() * 60 - 30}deg);
-            pointer-events: none !important;
-            transition: opacity 0.5s ease;
-            z-index: ${100 + Math.floor(Math.random() * 100)};
-            filter: grayscale(${Math.random()}) contrast(1.2) opacity(0.7);
-        `;
-        requestAnimationFrame(() => {
-            popup.style.opacity = 0.3 + Math.random() * 0.5;
+    popup.style.cssText = `
+        left: ${x}px; top: ${y}px;
+        width: ${size}px; height: ${size}px;
+        opacity: 0;
+        transform: scale(${0.5 + Math.random()}) rotate(${Math.random() * 60 - 30}deg);
+        pointer-events: none !important;
+        transition: opacity 0.5s ease;
+        z-index: ${100 + Math.floor(Math.random() * 100)};
+        filter: grayscale(${Math.random()}) contrast(1.2) opacity(0.7);
+    `;
+    requestAnimationFrame(() => {
+        popup.style.opacity = 0.3 + Math.random() * 0.5;
+        setTimeout(() => {
+            popup.style.opacity = 0;
             setTimeout(() => {
-                popup.style.opacity = 0;
-                setTimeout(() => {
-                    if (popup.parentNode) popup.remove();
-                    activePopups.delete(popup);
-                }, 1000);
-            }, 800 + Math.random() * 1500);
-        });
-    } else {
-        // GAME
-        popup.classList.add('hypno-game');
-        popup.style.cssText = `
-            left: ${x}px; top: ${y}px;
-            width: ${size}px; height: ${size}px;
-            animation: hypnoAppearSoft 0.4s ease-out forwards;
-            z-index: 10001; 
-            pointer-events: auto !important; 
-            cursor: pointer; /* Enable pointer */
-            touch-action: none;
-        `;
-        runGame(popup, img, Math.floor(Math.random() * 4));
-    }
+                if (popup.parentNode) popup.remove();
+                activePopups.delete(popup);
+            }, 1000);
+        }, 800 + Math.random() * 1500);
+    });
 
     overlayContainer.appendChild(popup);
     activePopups.add(popup);
-
     scheduleSpawn(100 + Math.random() * 400);
 }
 
 const HypnoPopups = {
     attach(container) {
-        // Create Toggle Button in the feed container
         const btn = document.createElement('button');
         btn.className = 'hypno-toggle-btn';
         btn.innerHTML = '🌀';
@@ -541,14 +503,13 @@ const HypnoPopups = {
         if (hypnoActive) return;
         hypnoActive = true;
 
-        // Create Full Screen Overlay
         overlayContainer = document.getElementById('hypno-overlay');
         if (!overlayContainer) {
             overlayContainer = document.createElement('div');
             overlayContainer.id = 'hypno-overlay';
             document.body.appendChild(overlayContainer);
         }
-        overlayContainer.innerHTML = ''; // Start clean
+        overlayContainer.innerHTML = '';
 
         scheduleSpawn(200);
         ChaosEngine.start();

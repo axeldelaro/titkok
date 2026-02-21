@@ -1547,6 +1547,561 @@
     transition: opacity 1s ease;
 }
 
+/* ══════════════════════════════════════════════════════════
+   NEW HYPNOSIS EFFECTS (30 additional effects)
+   ══════════════════════════════════════════════════════════ */
+
+/* ── Zoom Pulse ── */
+.hypno-zoom-pulse {
+    animation: hypnoZoomPulse 1s ease-in-out infinite;
+}
+
+@keyframes hypnoZoomPulse {
+
+    0%,
+    100% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.08);
+    }
+}
+
+/* ── Skew X ── */
+.hypno-skew-x {
+    animation: hypnoSkewX 1.5s ease-in-out;
+}
+
+@keyframes hypnoSkewX {
+
+    0%,
+    100% {
+        transform: skewX(0);
+    }
+
+    25% {
+        transform: skewX(5deg);
+    }
+
+    75% {
+        transform: skewX(-5deg);
+    }
+}
+
+/* ── Skew Y ── */
+.hypno-skew-y {
+    animation: hypnoSkewY 1.5s ease-in-out;
+}
+
+@keyframes hypnoSkewY {
+
+    0%,
+    100% {
+        transform: skewY(0);
+    }
+
+    25% {
+        transform: skewY(3deg);
+    }
+
+    75% {
+        transform: skewY(-3deg);
+    }
+}
+
+/* ── Negative Flash ── */
+.hypno-negative-flash {
+    filter: invert(1) !important;
+    transition: filter 0.15s;
+}
+
+/* ── Wobble ── */
+.hypno-wobble {
+    animation: hypnoWobble 0.5s ease-in-out infinite;
+}
+
+@keyframes hypnoWobble {
+
+    0%,
+    100% {
+        transform: rotate(0deg);
+    }
+
+    25% {
+        transform: rotate(1.5deg);
+    }
+
+    75% {
+        transform: rotate(-1.5deg);
+    }
+}
+
+/* ── Fade Pulse ── */
+.hypno-fade-pulse {
+    animation: hypnoFadePulse 1.5s ease-in-out infinite;
+}
+
+@keyframes hypnoFadePulse {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.4;
+    }
+}
+
+/* ── Color Drain (desaturate) ── */
+.hypno-color-drain {
+    animation: hypnoColorDrain 3s ease-in-out;
+}
+
+@keyframes hypnoColorDrain {
+
+    0%,
+    100% {
+        filter: saturate(1);
+    }
+
+    50% {
+        filter: saturate(0);
+    }
+}
+
+/* ── Red Channel ── */
+.hypno-red-channel {
+    filter: sepia(1) hue-rotate(-30deg) saturate(3) brightness(0.9) !important;
+    transition: filter 0.3s;
+}
+
+/* ── Blue Channel ── */
+.hypno-blue-channel {
+    filter: sepia(1) hue-rotate(180deg) saturate(3) brightness(0.9) !important;
+    transition: filter 0.3s;
+}
+
+/* ── Green Channel ── */
+.hypno-green-channel {
+    filter: sepia(1) hue-rotate(80deg) saturate(3) brightness(0.9) !important;
+    transition: filter 0.3s;
+}
+
+/* ── Sepia Flash ── */
+.hypno-sepia-flash {
+    filter: sepia(1) brightness(1.1) !important;
+    transition: filter 0.2s;
+}
+
+/* ── Thermal Vision ── */
+.hypno-thermal {
+    filter: hue-rotate(180deg) contrast(2) saturate(3) brightness(1.2) !important;
+    transition: filter 0.3s;
+}
+
+/* ── Night Vision ── */
+.hypno-night-vision {
+    filter: brightness(1.5) contrast(1.8) sepia(1) hue-rotate(80deg) saturate(4) !important;
+    transition: filter 0.4s;
+}
+
+/* ── Heartbeat ── */
+.hypno-heartbeat {
+    animation: hypnoHeartbeat 0.6s ease-in-out infinite;
+}
+
+@keyframes hypnoHeartbeat {
+
+    0%,
+    100% {
+        transform: scale(1);
+    }
+
+    15% {
+        transform: scale(1.04);
+    }
+
+    30% {
+        transform: scale(1);
+    }
+
+    45% {
+        transform: scale(1.06);
+    }
+
+    60% {
+        transform: scale(1);
+    }
+}
+
+/* ── Earthquake ── */
+.hypno-earthquake {
+    animation: hypnoEarthquake 0.1s linear infinite;
+}
+
+@keyframes hypnoEarthquake {
+    0% {
+        transform: translate(0);
+    }
+
+    25% {
+        transform: translate(-4px, 3px);
+    }
+
+    50% {
+        transform: translate(3px, -4px);
+    }
+
+    75% {
+        transform: translate(-3px, -2px);
+    }
+
+    100% {
+        transform: translate(4px, 2px);
+    }
+}
+
+/* ── Drunk Mode ── */
+.hypno-drunk {
+    animation: hypnoDrunk 2s ease-in-out infinite;
+    filter: blur(1px);
+}
+
+@keyframes hypnoDrunk {
+
+    0%,
+    100% {
+        transform: rotate(0) skewX(0);
+    }
+
+    25% {
+        transform: rotate(1.5deg) skewX(2deg);
+    }
+
+    50% {
+        transform: rotate(-1deg) skewX(-1.5deg);
+    }
+
+    75% {
+        transform: rotate(0.8deg) skewX(1deg);
+    }
+}
+
+/* ── Solarize ── */
+.hypno-solarize {
+    filter: invert(0.8) contrast(1.5) brightness(1.3) !important;
+    transition: filter 0.3s;
+}
+
+/* ── Hologram ── */
+.hypno-hologram {
+    animation: hypnoHologram 0.15s steps(2) infinite;
+    filter: brightness(1.3) contrast(0.8);
+}
+
+@keyframes hypnoHologram {
+    0% {
+        opacity: 1;
+        text-shadow: 2px 0 #0ff, -2px 0 #f0f;
+    }
+
+    50% {
+        opacity: 0.85;
+        text-shadow: -2px 0 #0ff, 2px 0 #f0f;
+    }
+}
+
+/* ── Old TV ── */
+.hypno-old-tv {
+    animation: hypnoOldTV 0.08s steps(3) infinite;
+    filter: contrast(1.3) brightness(0.9);
+}
+
+@keyframes hypnoOldTV {
+    0% {
+        transform: translate(0, 0);
+        filter: brightness(0.9);
+    }
+
+    33% {
+        transform: translate(-1px, 1px);
+        filter: brightness(1.1);
+    }
+
+    66% {
+        transform: translate(1px, -1px);
+        filter: brightness(0.85);
+    }
+}
+
+/* ── Subliminal Flash ── */
+.hypno-subliminal-flash {
+    filter: brightness(10) !important;
+}
+
+/* ── Cyberpunk ── */
+.hypno-cyberpunk {
+    animation: hypnoCyberpunk 2s linear infinite;
+}
+
+@keyframes hypnoCyberpunk {
+
+    0%,
+    100% {
+        filter: hue-rotate(0deg) saturate(2) contrast(1.3);
+    }
+
+    33% {
+        filter: hue-rotate(90deg) saturate(2.5) contrast(1.5);
+    }
+
+    66% {
+        filter: hue-rotate(270deg) saturate(3) contrast(1.2);
+    }
+}
+
+/* ── Blood Moon ── */
+.hypno-blood-moon {
+    filter: sepia(1) hue-rotate(-20deg) saturate(5) brightness(0.7) contrast(1.3) !important;
+    transition: filter 0.5s;
+}
+
+/* ── Retro Wave ── */
+.hypno-retro-wave {
+    animation: hypnoRetroWave 3s linear infinite;
+}
+
+@keyframes hypnoRetroWave {
+
+    0%,
+    100% {
+        filter: hue-rotate(260deg) saturate(2) brightness(1.1);
+    }
+
+    50% {
+        filter: hue-rotate(300deg) saturate(2.5) brightness(1.3);
+    }
+}
+
+/* ── Datamosh ── */
+.hypno-datamosh {
+    animation: hypnoDatamosh 0.1s steps(4) infinite;
+}
+
+@keyframes hypnoDatamosh {
+    0% {
+        clip-path: inset(0 0 50% 0);
+        transform: translate(3px, 0);
+    }
+
+    25% {
+        clip-path: inset(30% 0 20% 0);
+        transform: translate(-5px, 2px);
+    }
+
+    50% {
+        clip-path: inset(60% 0 0 0);
+        transform: translate(2px, -3px);
+    }
+
+    75% {
+        clip-path: inset(10% 0 40% 0);
+        transform: translate(-2px, 1px);
+    }
+
+    100% {
+        clip-path: inset(0);
+        transform: translate(0);
+    }
+}
+
+/* ── Ghost Trail ── */
+.hypno-ghost-trail {
+    animation: hypnoGhostTrail 0.3s ease infinite;
+}
+
+@keyframes hypnoGhostTrail {
+    0% {
+        text-shadow: 0 0 0 transparent;
+        filter: none;
+    }
+
+    50% {
+        text-shadow: 5px 5px 10px rgba(200, 100, 255, .5), -5px -5px 10px rgba(100, 200, 255, .5);
+        filter: blur(0.5px);
+    }
+
+    100% {
+        text-shadow: 0 0 0 transparent;
+        filter: none;
+    }
+}
+
+/* ── Fish Eye ── */
+.hypno-fish-eye {
+    animation: hypnoFishEye 2s ease-in-out;
+}
+
+@keyframes hypnoFishEye {
+
+    0%,
+    100% {
+        transform: scale(1);
+        border-radius: 0;
+    }
+
+    50% {
+        transform: scale(1.15);
+        border-radius: 50%;
+        overflow: hidden;
+    }
+}
+
+/* ── Matrix Rain (Overlay) ── */
+.hypno-matrix-rain {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    background: repeating-linear-gradient(0deg,
+            transparent,
+            transparent 20px,
+            rgba(0, 255, 65, 0.05) 20px,
+            rgba(0, 255, 65, 0.05) 21px);
+    animation: hypnoMatrixScroll 0.5s linear infinite;
+    mix-blend-mode: screen;
+    z-index: 9998;
+}
+
+.hypno-matrix-rain::after {
+    content: 'ﾊﾐﾋｰｳｼﾅﾓﾆｻﾜﾂｵﾘｱﾎﾃﾏｹﾒｴｶｷﾑﾕﾗｾﾈｽﾀﾇﾍ';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    color: rgba(0, 255, 65, 0.15);
+    font-family: monospace;
+    font-size: 14px;
+    line-height: 20px;
+    word-wrap: break-word;
+    overflow: hidden;
+    height: 100%;
+    animation: hypnoMatrixScroll 2s linear infinite;
+}
+
+@keyframes hypnoMatrixScroll {
+    0% {
+        background-position: 0 0;
+    }
+
+    100% {
+        background-position: 0 40px;
+    }
+}
+
+/* ── Film Grain (Persistent Overlay) ── */
+.hypno-film-grain {
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    pointer-events: none;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    opacity: 0.06;
+    animation: hypnoGrain 0.2s steps(4) infinite;
+    z-index: 9997;
+}
+
+@keyframes hypnoGrain {
+    0% {
+        transform: translate(0);
+    }
+
+    25% {
+        transform: translate(-5%, -5%);
+    }
+
+    50% {
+        transform: translate(5%, 5%);
+    }
+
+    75% {
+        transform: translate(-2%, 3%);
+    }
+}
+
+/* ── Speed Lines (Persistent Overlay) ── */
+.hypno-speed-lines {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    background: repeating-conic-gradient(from 0deg at 50% 50%,
+            transparent 0deg,
+            transparent 8deg,
+            rgba(255, 255, 255, 0.02) 8deg,
+            rgba(255, 255, 255, 0.02) 10deg);
+    animation: hypnoSpeedSpin 10s linear infinite;
+    z-index: 9996;
+}
+
+@keyframes hypnoSpeedSpin {
+    0% {
+        transform: rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+/* ── Blackout ── */
+.hypno-blackout {
+    filter: brightness(0) !important;
+    transition: filter 0.2s;
+}
+
+/* ── Whiteout ── */
+.hypno-whiteout {
+    filter: brightness(5) !important;
+    transition: filter 0.15s;
+}
+
+/* ── Chroma Storm ── */
+.hypno-chroma-storm {
+    animation: hypnoChromaStorm 0.3s linear infinite;
+}
+
+@keyframes hypnoChromaStorm {
+    0% {
+        filter: hue-rotate(0deg) saturate(5) contrast(2);
+    }
+
+    25% {
+        filter: hue-rotate(90deg) saturate(4) contrast(1.5);
+    }
+
+    50% {
+        filter: hue-rotate(180deg) saturate(6) contrast(2.5);
+    }
+
+    75% {
+        filter: hue-rotate(270deg) saturate(3) contrast(1.8);
+    }
+
+    100% {
+        filter: hue-rotate(360deg) saturate(5) contrast(2);
+    }
+}
+
+
 /* ── Hypno Config Modal Styles ── */
 .hypno-config-modal {
     max-width: 650px !important;

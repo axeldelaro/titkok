@@ -1230,9 +1230,9 @@ const UI = {
                 const container = document.createElement('div');
                 container.style.padding = '10px';
 
-                // Effect definitions with icons, descriptions, and preview CSS
+                // Effect definitions with icons, descriptions, and preview CSS — 46 effects in 5 categories
                 const effects = {
-                    'Visual / Chill': [
+                    'Visual / Chill 👁️': [
                         { key: 'scanlines', icon: '📺', desc: 'CRT scanlines overlay', preview: 'background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.3) 2px,rgba(0,0,0,0.3) 4px);' },
                         { key: 'rgbShift', icon: '🌈', desc: 'RGB color split', preview: 'box-shadow:2px 0 #f0f,-2px 0 #0ff;' },
                         { key: 'pixelate', icon: '🟩', desc: 'Pixel mosaic effect', preview: 'image-rendering:pixelated;background-size:8px 8px;background-image:repeating-conic-gradient(#333 0% 25%,#555 0% 50%);' },
@@ -1240,19 +1240,55 @@ const UI = {
                         { key: 'breathe', icon: '🫁', desc: 'Breathing pulse', preview: 'animation:hypnoPreviewBreathe 2s ease-in-out infinite;' },
                         { key: 'tilt', icon: '📐', desc: 'Subtle tilt shifts', preview: 'transform:rotate(3deg);' },
                         { key: 'mirror', icon: '🪞', desc: 'Mirror flip axis', preview: 'transform:scaleX(-1);' },
-                        { key: 'colorCycle', icon: '🎡', desc: 'Hue rotation cycle', preview: 'animation:hypnoPreviewHue 2s linear infinite;' }
+                        { key: 'colorCycle', icon: '🎡', desc: 'Hue rotation cycle', preview: 'animation:hypnoPreviewHue 2s linear infinite;' },
+                        { key: 'fadePulse', icon: '💫', desc: 'Opacity oscillation', preview: 'animation:hypnoFadePulse 1.5s ease-in-out infinite;' },
+                        { key: 'filmGrain', icon: '🎞️', desc: 'Film grain overlay', preview: 'background:repeating-conic-gradient(#333 0% 25%,#444 0% 50%);background-size:4px 4px;' },
+                        { key: 'sepiaFlash', icon: '📜', desc: 'Quick sepia flash', preview: 'filter:sepia(1);' }
                     ],
-                    'Intense / Chaos': [
-                        { key: 'glitch', icon: '⚡', desc: 'Screen glitch bursts', preview: 'animation:hypnoPreviewGlitch 0.3s infinite;' },
-                        { key: 'strobe', icon: '💡', desc: 'Flash strobe', preview: 'animation:hypnoPreviewStrobe 0.5s infinite;' },
-                        { key: 'doubleVision', icon: '👓', desc: 'Double vision ghosting', preview: 'box-shadow:3px 3px 0 rgba(255,100,100,0.5),-3px -3px 0 rgba(100,100,255,0.5);' },
-                        { key: 'tunnel', icon: '🌀', desc: 'Tunnel vortex overlay', preview: 'background:radial-gradient(circle,transparent 30%,rgba(0,0,0,0.8) 100%);' },
+                    'Motion / Transform 🌊': [
+                        { key: 'doubleVision', icon: '👓', desc: 'Double vision ghost', preview: 'box-shadow:3px 3px 0 rgba(255,100,100,0.5),-3px -3px 0 rgba(100,100,255,0.5);' },
                         { key: 'verticalStretch', icon: '↕️', desc: 'Screen stretch warp', preview: 'transform:scaleY(1.3);' },
+                        { key: 'glitch', icon: '⚡', desc: 'Screen glitch bursts', preview: 'animation:hypnoPreviewGlitch 0.3s infinite;' },
+                        { key: 'zoomPulse', icon: '🔍', desc: 'Zoom in/out pulse', preview: 'animation:hypnoPreviewBreathe 1s ease-in-out infinite;' },
+                        { key: 'skewHorizontal', icon: '↗️', desc: 'Horizontal skew', preview: 'transform:skewX(8deg);' },
+                        { key: 'skewVertical', icon: '↘️', desc: 'Vertical skew', preview: 'transform:skewY(5deg);' },
+                        { key: 'wobble', icon: '〰️', desc: 'Sine-wave wobble', preview: 'animation:hypnoPreviewGlitch 0.5s ease-in-out infinite;' },
+                        { key: 'heartbeat', icon: '💓', desc: 'Heartbeat pulse', preview: 'animation:hypnoPreviewBreathe 0.6s ease-in-out infinite;' },
+                        { key: 'earthquake', icon: '🌋', desc: 'Heavy screen shake', preview: 'animation:hypnoPreviewGlitch 0.1s linear infinite;' },
+                        { key: 'drunkMode', icon: '🍺', desc: 'Dizzy blur + sway', preview: 'filter:blur(1px);transform:rotate(2deg) skewX(3deg);' }
                     ],
-                    'Advanced ⚠️': [
+                    'Color / Filter 🎨': [
+                        { key: 'negativeFlash', icon: '🔳', desc: 'Brief color invert', preview: 'filter:invert(1);' },
+                        { key: 'thermalVision', icon: '🌡️', desc: 'Thermal camera look', preview: 'filter:hue-rotate(180deg) contrast(2) saturate(3);' },
+                        { key: 'nightVision', icon: '🌙', desc: 'Green night vision', preview: 'filter:sepia(1) hue-rotate(80deg) saturate(4) brightness(1.5);' },
+                        { key: 'redChannel', icon: '🟥', desc: 'Red channel only', preview: 'filter:sepia(1) hue-rotate(-30deg) saturate(3);' },
+                        { key: 'blueChannel', icon: '🟦', desc: 'Blue channel only', preview: 'filter:sepia(1) hue-rotate(180deg) saturate(3);' },
+                        { key: 'greenChannel', icon: '🟩', desc: 'Green channel only', preview: 'filter:sepia(1) hue-rotate(80deg) saturate(3);' },
+                        { key: 'solarize', icon: '☀️', desc: 'Partial invert', preview: 'filter:invert(0.8) contrast(1.5);' },
+                        { key: 'colorDrain', icon: '🩶', desc: 'Desaturate pulse', preview: 'filter:saturate(0);' },
+                        { key: 'cyberpunk', icon: '🤖', desc: 'Neon color cycling', preview: 'animation:hypnoPreviewHue 1s linear infinite;filter:saturate(2);' },
+                        { key: 'bloodMoon', icon: '🩸', desc: 'Deep red overlay', preview: 'filter:sepia(1) hue-rotate(-20deg) saturate(5) brightness(0.7);' },
+                        { key: 'retroWave', icon: '🌆', desc: 'Synthwave palette', preview: 'background:linear-gradient(135deg,#c864ff,#0ff);' }
+                    ],
+                    'Overlay / Complex 🎭': [
+                        { key: 'tunnel', icon: '🌀', desc: 'Tunnel vortex overlay', preview: 'background:radial-gradient(circle,transparent 30%,rgba(0,0,0,0.8) 100%);' },
+                        { key: 'strobe', icon: '💡', desc: 'Flash strobe', preview: 'animation:hypnoPreviewStrobe 0.5s infinite;' },
+                        { key: 'hologram', icon: '🔮', desc: 'Hologram flicker', preview: 'box-shadow:2px 0 #0ff,-2px 0 #f0f;animation:hypnoPreviewStrobe 0.15s steps(2) infinite;' },
+                        { key: 'oldTV', icon: '📟', desc: 'Old TV jitter', preview: 'animation:hypnoPreviewGlitch 0.08s steps(3) infinite;' },
+                        { key: 'subliminalFlash', icon: '⚡', desc: 'Bright white flash', preview: 'background:#fff;' },
+                        { key: 'matrixRain', icon: '🟢', desc: 'Matrix code rain', preview: 'background:#000;color:#0f0;font-size:8px;overflow:hidden;line-height:1;' },
+                        { key: 'speedLines', icon: '💨', desc: 'Radial speed lines', preview: 'background:repeating-conic-gradient(transparent 0deg,transparent 8deg,rgba(255,255,255,0.05) 8deg,rgba(255,255,255,0.05) 10deg);' },
+                        { key: 'datamosh', icon: '📼', desc: 'Data corruption', preview: 'background:linear-gradient(0deg,#333 25%,transparent 25%,transparent 50%,#444 50%,#444 75%,transparent 75%);background-size:100% 8px;' },
+                        { key: 'ghostTrail', icon: '👻', desc: 'Afterimage trail', preview: 'box-shadow:3px 3px 8px rgba(200,100,255,0.4),-3px -3px 8px rgba(100,200,255,0.4);' },
+                        { key: 'fishEye', icon: '🐟', desc: 'Fish eye lens', preview: 'border-radius:50%;transform:scale(1.1);' }
+                    ],
+                    'Extreme ⚠️': [
                         { key: 'kaleidoscope', icon: '🔮', desc: 'Kaleidoscope fractal', preview: 'background:conic-gradient(from 0deg,#f0f,#0ff,#ff0,#f0f);' },
                         { key: 'liquidWarp', icon: '🌊', desc: 'Liquid distortion', preview: 'animation:hypnoPreviewLiquid 2s ease-in-out infinite;border-radius:30% 70% 70% 30% / 30% 30% 70% 70%;' },
-                        { key: 'vortex', icon: '🌪️', desc: 'Spin vortex (motion!)', preview: 'animation:hypnoPreviewVortex 2s linear infinite;' }
+                        { key: 'vortex', icon: '🌪️', desc: 'Spin vortex (motion!)', preview: 'animation:hypnoPreviewVortex 2s linear infinite;' },
+                        { key: 'blackout', icon: '⬛', desc: 'Random blackouts', preview: 'background:#000;' },
+                        { key: 'whiteout', icon: '⬜', desc: 'Blinding white flash', preview: 'background:#fff;' },
+                        { key: 'chromaStorm', icon: '🌈', desc: 'Crazy color storm', preview: 'animation:hypnoPreviewHue 0.3s linear infinite;filter:saturate(5);' }
                     ]
                 };
 
