@@ -4,13 +4,6 @@ import { Toast } from '../components/toast.js';
 let FaceMesh;
 let faceMeshInstance;
 
-// MediaPipe 468 landmarks:
-// Lips outer: 61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 409, 270, 269, 267, 0, 37, 39, 40
-// Left Iris: 474, 475, 476, 477
-// Right Iris: 469, 470, 471, 472
-// Left Eyeshadow area: above 33, 7, 163, 144, 145, 153, 154, 155, 133
-// Right Eyeshadow area: above 362, 382, 381, 380, 374, 373, 390, 249, 263
-
 const LIPS_OUTER = [61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 409, 270, 269, 267, 0, 37, 39, 40, 185];
 const LEFT_IRIS = [474, 475, 476, 477];
 const RIGHT_IRIS = [469, 470, 471, 472];
@@ -22,25 +15,21 @@ const FaceEditor = {
     _canvas: null,
     _ctx: null,
     _imgEl: null,
-    _originalImageSrc: null,
+    _blobUrl: null,
     _originalImageObj: null,
     _cachedLandmarks: null,
-    _initializing: false,   // FIX #1: empêche la double initialisation
+    _initializing: false,
 
     _settings: {
-        lipColor: '#ff0055',
-        lipIntensity: 0.0,
-        lipThickness: 1.0,
-        eyeColor: '#00aaff',
-        eyeIntensity: 0.0,
-        makeupColor: '#111111',
-        makeupIntensity: 0.0,
+        lipColor: '#ff0055', lipIntensity: 0.0, lipThickness: 1.0,
+        eyeColor: '#00aaff', eyeIntensity: 0.0,
+        makeupColor: '#111111', makeupIntensity: 0.0,
     },
 
-    // ── Init MediaPipe (idempotent & thread-safe) ──────────────────────────
+    // ── Init MediaPipe ────────────────────────────────────────────────────
     async init() {
-        if (FaceMesh) return;                    // déjà prêt
-        if (this._initializing) return;          // FIX #1: déjà en cours
+        if (FaceMesh) return;
+        if (this._initializing) return;
         this._initializing = true;
 
         try {
@@ -51,41 +40,36 @@ const FaceEditor = {
             faceMeshInstance = new FaceMesh({
                 locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
             });
-
             faceMeshInstance.setOptions({
                 maxNumFaces: 1,
-                refineLandmarks: true,   // nécessaire pour les iris
+                refineLandmarks: true,
                 minDetectionConfidence: 0.5,
                 minTrackingConfidence: 0.5
             });
-
             faceMeshInstance.onResults(this._onResults.bind(this));
         } finally {
             this._initializing = false;
         }
     },
 
-    // FIX #1: chargement parallèle des deux scripts MediaPipe
+    // Chargement parallèle des scripts (sans recharger si déjà présents)
     async _loadScripts() {
         const load = (src) => new Promise((resolve, reject) => {
-            // Évite de recharger un script déjà présent
             if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
             const s = document.createElement('script');
             s.src = src;
             s.onload = resolve;
-            s.onerror = () => reject(new Error(`Impossible de charger : ${src}`));
+            s.onerror = () => reject(new Error(`Script error: ${src}`));
             document.body.appendChild(s);
         });
-
         await Promise.all([
             load('https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js'),
             load('https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js'),
         ]);
     },
 
-    // ── Ouverture du modal ─────────────────────────────────────────────────
+    // ── Ouverture ────────────────────────────────────────────────────────
     async open(imageObj) {
-        // FIX #4: les images locales (blob) ne peuvent pas être analysées par MediaPipe
         if (imageObj._isLocal) {
             Toast.show('AI Retouch indisponible pour les images locales (upload d\'abord)', 'error', 3500);
             return;
@@ -93,76 +77,74 @@ const FaceEditor = {
 
         this._originalImageObj = imageObj;
         this._cachedLandmarks = null;
-
-        // Reset settings
         this._settings = {
-            lipColor: '#ff0055',
-            lipIntensity: 0.0,
-            lipThickness: 1.0,
-            eyeColor: '#00aaff',
-            eyeIntensity: 0.0,
-            makeupColor: '#111111',
-            makeupIntensity: 0.0,
+            lipColor: '#ff0055', lipIntensity: 0.0, lipThickness: 1.0,
+            eyeColor: '#00aaff', eyeIntensity: 0.0,
+            makeupColor: '#111111', makeupIntensity: 0.0,
         };
 
         this._buildUI();
         this._showLoading(true);
-
         await this.init();
 
-        // Résolution 1080px pour la vitesse
-        this._originalImageSrc = Gallery.getImageURL(imageObj, 1080);
+        // ── Chargement de l'image via fetch → blob ──────────────────────
+        // Les URLs Google Photos ont des restrictions CORS qui peuvent
+        // corrompre le canvas (tainting). En passant par fetch → blob URL
+        // on crée une URL locale propre, sans problème CORS, compatible
+        // avec MediaPipe et toBlob().
+        const tryFetch = async (url) => {
+            const res = await fetch(url, { credentials: 'omit' });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            return res.blob();
+        };
 
-        // Charge l'image dans le canvas
-        this._imgEl = new Image();
-        this._imgEl.crossOrigin = 'anonymous';
+        try {
+            // Tentative 1080p, fallback 512p
+            const url1080 = Gallery.getImageURL(imageObj, 1080);
+            const url512 = Gallery.getImageURL(imageObj, 512);
+            const blob = await tryFetch(url1080).catch(() => tryFetch(url512));
 
-        this._imgEl.onload = async () => {
-            if (!this._modal) return;  // FIX #2: modal fermé pendant le chargement
-            this._canvas.width = this._imgEl.naturalWidth;
-            this._canvas.height = this._imgEl.naturalHeight;
-            this._ctx.drawImage(this._imgEl, 0, 0);
+            if (!this._modal) return; // fermé pendant le fetch
 
-            try {
-                await faceMeshInstance.send({ image: this._imgEl });
-            } catch (err) {
-                console.error('[FaceEditor] FaceMesh error:', err);
-                Toast.show('Impossible de détecter le visage. Essaie une autre image.', 'error');
+            // Libérer l'ancien blob si existait
+            if (this._blobUrl) URL.revokeObjectURL(this._blobUrl);
+            this._blobUrl = URL.createObjectURL(blob);
+
+            this._imgEl = new Image();
+            this._imgEl.onload = async () => {
+                if (!this._modal) return;
+                this._canvas.width = this._imgEl.naturalWidth;
+                this._canvas.height = this._imgEl.naturalHeight;
+                this._ctx.drawImage(this._imgEl, 0, 0);
+                try {
+                    await faceMeshInstance.send({ image: this._imgEl });
+                } catch (err) {
+                    console.error('[FaceEditor] FaceMesh error:', err);
+                    Toast.show('Impossible de détecter le visage. Essaie une autre image.', 'error');
+                    this._showLoading(false);
+                }
+            };
+            this._imgEl.onerror = () => {
+                Toast.show('Erreur lors du chargement de l\'image.', 'error');
+                this._showLoading(false);
+            };
+            this._imgEl.src = this._blobUrl;
+
+        } catch (err) {
+            console.error('[FaceEditor] Fetch image failed:', err);
+            if (this._modal) {
+                Toast.show('Impossible de charger l\'image — vérifie ta connexion.', 'error');
                 this._showLoading(false);
             }
-        };
-
-        this._imgEl.onerror = () => {
-            console.warn('[FaceEditor] Chargement direct échoué, tentative via proxy…');
-
-            const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(this._originalImageSrc)}`;
-            fetch(proxyUrl)
-                .then(res => {
-                    if (!res.ok) throw new Error('Proxy failed');
-                    return res.blob();
-                })
-                .then(blob => {
-                    if (!this._modal) return;   // FIX #2: modal fermé entre-temps
-                    this._imgEl.onerror = null; // évite la boucle infinie
-                    this._imgEl.src = URL.createObjectURL(blob);
-                })
-                .catch(err => {
-                    console.error('[FaceEditor] Proxy fetch failed', err);
-                    Toast.show('Erreur lors du chargement de l\'image.', 'error');
-                    this._showLoading(false);
-                });
-        };
-
-        this._imgEl.src = this._originalImageSrc;
+        }
     },
 
-    // ── Construction du modal ──────────────────────────────────────────────
+    // ── Construction du modal ────────────────────────────────────────────
     _buildUI() {
         if (this._modal) this._modal.remove();
 
         this._modal = document.createElement('div');
         this._modal.className = 'face-editor-modal';
-        // FIX #6: plus de <style> inline — les styles sont dans layout.css
         this._modal.innerHTML = `
             <div class="fe-header">
                 <button class="fe-close-btn" aria-label="Fermer">✕</button>
@@ -186,7 +168,6 @@ const FaceEditor = {
                 </div>
 
                 <div class="fe-panels">
-                    <!-- Lips Panel -->
                     <div class="fe-panel active" id="panel-lips">
                         <div class="fe-control">
                             <label>Épaisseur <span id="val-thickness">1.00</span></label>
@@ -202,7 +183,6 @@ const FaceEditor = {
                         </div>
                     </div>
 
-                    <!-- Eyes Panel -->
                     <div class="fe-panel" id="panel-eyes">
                         <div class="fe-control">
                             <label>Intensité couleur <span id="val-eye-int">0%</span></label>
@@ -214,7 +194,6 @@ const FaceEditor = {
                         </div>
                     </div>
 
-                    <!-- Makeup Panel -->
                     <div class="fe-panel" id="panel-makeup">
                         <div class="fe-control">
                             <label>Fard à paupières <span id="val-makeup-int">0%</span></label>
@@ -237,20 +216,15 @@ const FaceEditor = {
         this._canvas = this._modal.querySelector('#fe-canvas');
         this._ctx = this._canvas.getContext('2d');
 
-        // Fermeture
         this._modal.querySelector('.fe-close-btn').onclick = () => this._close();
-
-        // Enregistrement
         this._modal.querySelector('.fe-save-btn').onclick = () => this._save();
 
-        // Réinitialisation
         this._modal.querySelector('.fe-reset-btn').onclick = () => {
             this._settings = {
                 lipColor: '#ff0055', lipIntensity: 0.0, lipThickness: 1.0,
                 eyeColor: '#00aaff', eyeIntensity: 0.0,
                 makeupColor: '#111111', makeupIntensity: 0.0,
             };
-            // Réinitialiser les contrôles visuellement
             this._modal.querySelector('#sl-lip-thickness').value = 1.0;
             this._modal.querySelector('#sl-lip-intensity').value = 0;
             this._modal.querySelector('#sl-eye-intensity').value = 0;
@@ -265,7 +239,6 @@ const FaceEditor = {
             this._render();
         };
 
-        // Onglets
         this._modal.querySelectorAll('.fe-tab').forEach(btn => {
             btn.onclick = () => {
                 this._modal.querySelectorAll('.fe-tab').forEach(b => b.classList.remove('active'));
@@ -275,7 +248,6 @@ const FaceEditor = {
             };
         });
 
-        // Liaisons des sliders
         const bind = (id, key, valId, isPercent) => {
             const el = this._modal.querySelector('#' + id);
             if (!el) return;
@@ -299,25 +271,20 @@ const FaceEditor = {
         bind('cl-makeup-color', 'makeupColor');
     },
 
-    // ── Helpers DOM sécurisés ──────────────────────────────────────────────
-
-    // FIX #2: utilise this._modal pour toutes les requêtes DOM internes
     _showLoading(visible) {
         const el = this._modal?.querySelector('#fe-loading');
         if (el) el.style.display = visible ? 'flex' : 'none';
     },
 
     _close() {
-        if (this._modal) {
-            this._modal.remove();
-            this._modal = null;
-        }
+        if (this._blobUrl) { URL.revokeObjectURL(this._blobUrl); this._blobUrl = null; }
+        if (this._modal) { this._modal.remove(); this._modal = null; }
     },
 
-    // ── Callback MediaPipe ────────────────────────────────────────────────
+    // ── Callback MediaPipe ───────────────────────────────────────────────
     _onResults(results) {
-        this._showLoading(false);   // FIX #2: sécurisé
-        if (!this._modal) return;  // FIX #2: modal fermé pendant l'analyse
+        this._showLoading(false);
+        if (!this._modal) return;
 
         if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
             this._cachedLandmarks = results.multiFaceLandmarks[0];
@@ -328,13 +295,11 @@ const FaceEditor = {
         }
     },
 
-    // ── Rendu canvas ──────────────────────────────────────────────────────
+    // ── Rendu ────────────────────────────────────────────────────────────
     _render() {
         if (!this._imgEl || !this._ctx || !this._modal) return;
-
         const { width: w, height: h } = this._canvas;
 
-        // 1. Image originale (reset état canvas)
         this._ctx.globalCompositeOperation = 'source-over';
         this._ctx.globalAlpha = 1;
         this._ctx.filter = 'none';
@@ -343,13 +308,8 @@ const FaceEditor = {
         if (!this._cachedLandmarks) return;
         const lms = this._cachedLandmarks;
 
-        // 2. Lèvres
         this._drawLips(lms, w, h);
-
-        // 3. Iris
         this._drawIrises(lms, w, h);
-
-        // 4. Fard à paupières
         this._drawMakeup(lms, w, h);
     },
 
@@ -359,7 +319,6 @@ const FaceEditor = {
         return { x: cx / indices.length, y: cy / indices.length };
     },
 
-    // FIX #5: un seul save/restore, filtre et alpha réinitialisés explicitement
     _drawLips(lms, w, h) {
         const t = this._settings.lipThickness;
         const intensity = this._settings.lipIntensity;
@@ -367,7 +326,6 @@ const FaceEditor = {
 
         const center = this._getCenter(LIPS_OUTER, lms, w, h);
 
-        // ── Épaisseur : zoom clippé sur la zone des lèvres ──
         if (t !== 1.0) {
             this._ctx.save();
             this._ctx.beginPath();
@@ -385,7 +343,6 @@ const FaceEditor = {
             this._ctx.restore();
         }
 
-        // ── Couleur / teinte ──
         if (intensity > 0) {
             this._ctx.save();
             this._ctx.beginPath();
@@ -395,20 +352,14 @@ const FaceEditor = {
                 i === 0 ? this._ctx.moveTo(x, y) : this._ctx.lineTo(x, y);
             });
             this._ctx.closePath();
-
-            // Passe 1 : overlay doux
             this._ctx.filter = 'blur(4px)';
             this._ctx.globalCompositeOperation = 'overlay';
             this._ctx.globalAlpha = intensity * 0.5;
             this._ctx.fillStyle = this._settings.lipColor;
             this._ctx.fill();
-
-            // Passe 2 : teinte couleur plus marquée
             this._ctx.globalCompositeOperation = 'color';
             this._ctx.globalAlpha = intensity * 0.8;
             this._ctx.fill();
-
-            // FIX #5: réinitialisation explicite avant restore (au cas où)
             this._ctx.filter = 'none';
             this._ctx.globalAlpha = 1;
             this._ctx.globalCompositeOperation = 'source-over';
@@ -418,7 +369,6 @@ const FaceEditor = {
 
     _drawIrises(lms, w, h) {
         if (this._settings.eyeIntensity === 0) return;
-
         this._ctx.save();
         this._ctx.globalCompositeOperation = 'color';
         this._ctx.fillStyle = this._settings.eyeColor;
@@ -429,29 +379,22 @@ const FaceEditor = {
             const center = this._getCenter(indices, lms, w, h);
             const p1 = lms[indices[0]];
             const r = Math.hypot(p1.x * w - center.x, p1.y * h - center.y) * 1.2;
-
             this._ctx.beginPath();
             this._ctx.arc(center.x, center.y, r, 0, Math.PI * 2);
             this._ctx.fill();
-
             this._ctx.globalCompositeOperation = 'overlay';
             this._ctx.globalAlpha = this._settings.eyeIntensity * 0.5;
             this._ctx.fill();
-
-            // Remettre pour l'iris suivant
             this._ctx.globalCompositeOperation = 'color';
             this._ctx.globalAlpha = this._settings.eyeIntensity;
         };
-
         drawIris(LEFT_IRIS);
         drawIris(RIGHT_IRIS);
-
         this._ctx.restore();
     },
 
     _drawMakeup(lms, w, h) {
         if (this._settings.makeupIntensity === 0) return;
-
         this._ctx.save();
         this._ctx.fillStyle = this._settings.makeupColor;
         this._ctx.globalCompositeOperation = 'multiply';
@@ -461,22 +404,18 @@ const FaceEditor = {
         const drawPoly = (indices) => {
             this._ctx.beginPath();
             indices.forEach((idx, i) => {
-                const pt = lms[idx];
                 i === 0
-                    ? this._ctx.moveTo(pt.x * w, pt.y * h)
-                    : this._ctx.lineTo(pt.x * w, pt.y * h);
+                    ? this._ctx.moveTo(lms[idx].x * w, lms[idx].y * h)
+                    : this._ctx.lineTo(lms[idx].x * w, lms[idx].y * h);
             });
             this._ctx.fill();
         };
-
         drawPoly(LEFT_EYE_TOP);
         drawPoly(RIGHT_EYE_TOP);
-
         this._ctx.restore();
     },
 
-    // ── Sauvegarde ─────────────────────────────────────────────────────────
-    // FIX #3 : suppression de addLocalImages / removeLocalImages qui perturbaient les autres uploads
+    // ── Sauvegarde ──────────────────────────────────────────────────────
     async _save() {
         const saveBtn = this._modal?.querySelector('.fe-save-btn');
         if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = '⏳ Enregistrement…'; }
@@ -488,10 +427,8 @@ const FaceEditor = {
                 return;
             }
 
-            const fileName = `retouch_${Date.now()}.jpg`;
-            const file = new File([blob], fileName, { type: 'image/jpeg' });
-
-            this._close(); // Ferme immédiatement le modal
+            const file = new File([blob], `retouch_${Date.now()}.jpg`, { type: 'image/jpeg' });
+            this._close();
             Toast.show('⬆️ Envoi du retouch vers Google Photos…', 'info', 3000);
 
             try {
@@ -499,12 +436,7 @@ const FaceEditor = {
                     onFileComplete: () => Toast.show('✅ Retouch enregistré !', 'success', 3000),
                     onFileError: () => Toast.show('❌ Échec de l\'envoi vers Google Photos', 'error'),
                 });
-
-                // Actualise la galerie après un délai (Google Photos a besoin de traiter)
-                setTimeout(async () => {
-                    await Gallery.fetchAllImages();
-                }, 6000);
-
+                setTimeout(() => Gallery.fetchAllImages(), 6000);
             } catch (err) {
                 console.error('[FaceEditor] save error:', err);
                 Toast.show('Erreur lors de l\'enregistrement', 'error');
