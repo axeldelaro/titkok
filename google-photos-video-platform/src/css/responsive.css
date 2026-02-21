@@ -202,13 +202,19 @@
 
     /* Feed container should account for bottom nav */
     .feed-container {
-        height: calc(100dvh - 60px) !important;
         height: calc(100vh - 60px) !important;
+        /* fallback */
+        height: calc(100dvh - 60px) !important;
+        /* iOS Safari 15.4+ / Android Chrome */
     }
 
     .video-card-feed {
-        height: calc(100dvh - 60px);
         height: calc(100vh - 60px);
+        /* fallback */
+        height: calc(100dvh - 60px);
+        /* iOS Safari 15.4+ */
+        min-height: 300px;
+        /* sécurité très petit écran */
     }
 
     /* ── Search Bar — collapse on mobile ── */

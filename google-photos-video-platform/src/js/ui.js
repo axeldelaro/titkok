@@ -1189,6 +1189,8 @@ const UI = {
 
         Array.from(feed.children).forEach(card => observer.observe(card));
         HypnoPopups.attach(container);
+        // Précharger les images de la galerie
+        UI._prefetchMedia(images, 0, 20);
     },
 
     renderProfile: async (container) => {
@@ -1589,31 +1591,46 @@ const UI = {
         return date.toLocaleDateString();
     },
 
-    // ── Prefetch next N media items to eliminate micro-loading ──
+    // ── Prefetch next N media items — adaptatif selon la connexion ──
     _prefetchMedia: (items, startIdx = 0, count = 40) => {
-        // Remove old prefetch links
+        // Détection saveData / connexion lente
+        const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+        const isSaveData = conn?.saveData === true;
+        const isSlow = conn && ['slow-2g', '2g', '3g'].includes(conn.effectiveType);
+
+        // Réduire le nombre de préchargements sur mobile lent
+        const effectiveCount = isSaveData ? 0 : isSlow ? Math.min(count, 5) : count;
+
+        if (effectiveCount === 0) {
+            console.log('[Prefetch] Skipped — saveData mode active');
+            return;
+        }
+
+        // Supprimer les anciens liens prefetch
         document.querySelectorAll('link[data-prefetch]').forEach(l => l.remove());
 
-        const end = Math.min(startIdx + count, items.length);
+        const end = Math.min(startIdx + effectiveCount, items.length);
         for (let i = startIdx; i < end; i++) {
             const item = items[i];
-            if (!item || !item.baseUrl) continue;
+            if (!item || !item.baseUrl || item._isLocal) continue;
 
             const link = document.createElement('link');
             link.rel = 'prefetch';
             link.setAttribute('data-prefetch', 'media');
-            link.as = item.mediaMetadata?.video ? 'video' : 'image';
 
-            // Videos use baseUrl=dv, images use baseUrl=w1080
             if (item.mediaMetadata?.video) {
-                link.href = item._isLocal ? item.baseUrl : `${item.baseUrl}=dv`;
+                link.as = 'video';
+                link.href = `${item.baseUrl}=dv`;
             } else {
-                link.href = item._isLocal ? item.baseUrl : `${item.baseUrl}=w1080`;
+                link.as = 'image';
+                // Résolution réduite sur connexion lente
+                const w = isSlow ? 720 : 1080;
+                link.href = `${item.baseUrl}=w${w}`;
             }
 
             document.head.appendChild(link);
         }
-        console.log(`[Prefetch] Queued ${end - startIdx} items for background preload`);
+        console.log(`[Prefetch] Queued ${end - startIdx} items (${conn?.effectiveType ?? 'unknown'} connection)`);
     }
 };
 

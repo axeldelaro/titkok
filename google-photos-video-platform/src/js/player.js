@@ -247,6 +247,7 @@ export default class Player {
     }
 
     startPlayback() {
+        this._started = true;
         this.showLoading();
         this.video.src = this.isBlob ? this.videoUrl : `${this.videoUrl}=dv`;
         this.video.preload = 'auto';
@@ -261,7 +262,9 @@ export default class Player {
     }
 
     activate() {
-        if (!this.video.src || this.video.src === window.location.href) {
+        // FIX: video.src est égal à window.location.href quand il n'est pas défini (comportement navigateur).
+        // On teste `_started` pour savoir si startPlayback a déjà été appelé.
+        if (!this._started) {
             this.startPlayback();
         } else {
             this.video.play().catch(() => { });
