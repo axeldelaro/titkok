@@ -87,56 +87,59 @@ const FaceEditor = {
         this._showLoading(true);
         await this.init();
 
-        // ── Chargement de l'image via fetch → blob ──────────────────────
-        // Les URLs Google Photos ont des restrictions CORS qui peuvent
-        // corrompre le canvas (tainting). En passant par fetch → blob URL
-        // on crée une URL locale propre, sans problème CORS, compatible
-        // avec MediaPipe et toBlob().
-        const tryFetch = async (url) => {
-            const res = await fetch(url, { credentials: 'omit' });
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            return res.blob();
+        // ── Chargement de l'image (triple fallback) ──────────────────
+        // Google Photos (lh3.googleusercontent.com) envoie des headers CORS
+        // sur les requêtes img avec crossOrigin='anonymous'. Si ça échoue
+        // (réseau ou restriction CORS), on passe par wsrv.nl qui proxifie
+        // l'image en ajoutant Access-Control-Allow-Origin: *.
+        this._originalImageSrc = Gallery.getImageURL(imageObj, 1080);
+
+        const loadImageWithCORS = (src) => new Promise((resolve, reject) => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => resolve(img);
+            img.onerror = reject;
+            img.src = src;
+        });
+
+        const loadViaProxy = (originalSrc) => {
+            // wsrv.nl proxifie l'image en ajoutant Access-Control-Allow-Origin: *
+            const proxied = `https://wsrv.nl/?url=${encodeURIComponent(originalSrc)}&output=jpg&n=-1`;
+            return loadImageWithCORS(proxied);
         };
 
+        let img;
         try {
-            // Tentative 1080p, fallback 512p
-            const url1080 = Gallery.getImageURL(imageObj, 1080);
-            const url512 = Gallery.getImageURL(imageObj, 512);
-            const blob = await tryFetch(url1080).catch(() => tryFetch(url512));
-
-            if (!this._modal) return; // fermé pendant le fetch
-
-            // Libérer l'ancien blob si existait
-            if (this._blobUrl) URL.revokeObjectURL(this._blobUrl);
-            this._blobUrl = URL.createObjectURL(blob);
-
-            this._imgEl = new Image();
-            this._imgEl.onload = async () => {
-                if (!this._modal) return;
-                this._canvas.width = this._imgEl.naturalWidth;
-                this._canvas.height = this._imgEl.naturalHeight;
-                this._ctx.drawImage(this._imgEl, 0, 0);
-                try {
-                    await faceMeshInstance.send({ image: this._imgEl });
-                } catch (err) {
-                    console.error('[FaceEditor] FaceMesh error:', err);
-                    Toast.show('Impossible de détecter le visage. Essaie une autre image.', 'error');
-                    this._showLoading(false);
-                }
-            };
-            this._imgEl.onerror = () => {
-                Toast.show('Erreur lors du chargement de l\'image.', 'error');
-                this._showLoading(false);
-            };
-            this._imgEl.src = this._blobUrl;
-
+            // Tentative 1 : chargement direct avec CORS
+            img = await loadImageWithCORS(this._originalImageSrc).catch(async () => {
+                console.warn('[FaceEditor] Direct CORS load failed, trying wsrv.nl proxy…');
+                // Tentative 2 : proxy wsrv.nl
+                return await loadViaProxy(this._originalImageSrc);
+            });
         } catch (err) {
-            console.error('[FaceEditor] Fetch image failed:', err);
+            console.error('[FaceEditor] All image load methods failed:', err);
             if (this._modal) {
-                Toast.show('Impossible de charger l\'image — vérifie ta connexion.', 'error');
+                Toast.show('Impossible de charger cette image pour le retouch.', 'error', 4000);
                 this._showLoading(false);
             }
+            return;
         }
+
+        if (!this._modal) return; // modal fermé pendant le chargement
+
+        this._imgEl = img;
+        this._canvas.width = img.naturalWidth;
+        this._canvas.height = img.naturalHeight;
+        this._ctx.drawImage(img, 0, 0);
+
+        try {
+            await faceMeshInstance.send({ image: img });
+        } catch (err) {
+            console.error('[FaceEditor] FaceMesh error:', err);
+            Toast.show('Impossible de détecter le visage. Essaie une autre image.', 'error');
+            this._showLoading(false);
+        }
+
     },
 
     // ── Construction du modal ────────────────────────────────────────────

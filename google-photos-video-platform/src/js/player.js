@@ -605,61 +605,90 @@ export default class Player {
     _applyDelay(level) {
         this._clearDelay();
 
-        // Lower fadeAlpha = longer trail (old frames fade slower)
+        // Plus le fadeAlpha est bas, plus la trainée est longue
         const FADE_ALPHAS = [0.15, 0.08, 0.04, 0.02, 0.01];
-        const fadeAlpha = FADE_ALPHAS[level - 1];
+        const fadeAlpha = FADE_ALPHAS[Math.min(level - 1, FADE_ALPHAS.length - 1)];
 
+        // ── Créer le canvas de feedback ──────────────────────────
         const canvas = document.createElement('canvas');
         canvas.style.cssText = `
             position:absolute; top:0; left:0;
             width:100%; height:100%;
             pointer-events:none;
             z-index:2;
+            object-fit:contain;
         `;
         this.container.insertBefore(canvas, this.controls);
+
+        // Masquer la vidéo native — le canvas la remplace visuellement
+        this.video.style.opacity = '0';
+
         const ctx = canvas.getContext('2d', { willReadFrequently: false });
 
-        let rafId;
+        // Boucle RAF
+        let running = true;
         const tick = () => {
-            if (!canvas.parentNode) return;
-            rafId = requestAnimationFrame(tick);
+            if (!running || !canvas.parentNode) return;
+            requestAnimationFrame(tick);
 
             if (this.video.paused || this.video.readyState < 2) return;
 
-            const w = this.video.videoWidth || 640;
-            const h = this.video.videoHeight || 360;
+            const w = this.video.videoWidth || canvas.width || 640;
+            const h = this.video.videoHeight || canvas.height || 360;
+
+            // Redimensionner le canvas si nécessaire (reset l'état mais c'est acceptable)
             if (canvas.width !== w || canvas.height !== h) {
                 canvas.width = w;
                 canvas.height = h;
+                // Initialiser en noir pour que le fondu démarre proprement
+                ctx.fillStyle = '#000';
+                ctx.fillRect(0, 0, w, h);
             }
 
-            // Fade: semi-transparent black rect dims old frames
-            ctx.fillStyle = `rgba(0, 0, 0, ${fadeAlpha})`;
+            // 1. Fondu du contenu précédent → crée l'effet de trainée
+            ctx.globalCompositeOperation = 'source-over';
+            ctx.globalAlpha = fadeAlpha;
+            ctx.fillStyle = '#000';
             ctx.fillRect(0, 0, w, h);
 
-            // Draw current frame on top — it accumulates over fading old ones
-            ctx.globalAlpha = 0.6;
+            // 2. Dessiner la frame courante par-dessus avec faible opacité
+            //    → les anciennes frames restent visibles en transparence
+            ctx.globalAlpha = 0.85;
             ctx.drawImage(this.video, 0, 0, w, h);
             ctx.globalAlpha = 1.0;
         };
 
-        rafId = requestAnimationFrame(tick);
+        // Démarrer la boucle
+        requestAnimationFrame(tick);
+
         this._delayLayers = [{ el: canvas }];
-        this._delayRaf = rafId;
+        // Stocker le flag d'arrêt pour pouvoir stopper la boucle
+        this._delayStop = () => { running = false; };
     }
 
+
     _clearDelay() {
+        // Stopper la boucle RAF via le flag de closure
+        if (this._delayStop) {
+            this._delayStop();
+            this._delayStop = null;
+        }
+        // Ancienne méthode (compatibilité si _delayRaf existait)
         if (this._delayRaf) {
             cancelAnimationFrame(this._delayRaf);
             this._delayRaf = null;
         }
+        // Supprimer les canvas de l'effet
         if (this._delayLayers) {
             this._delayLayers.forEach(({ el }) => {
                 if (el.parentNode) el.remove();
             });
         }
         this._delayLayers = [];
+        // Restaurer la visibilité de la vidéo native
+        if (this.video) this.video.style.opacity = '1';
     }
+
 
     formatTime(seconds) {
         if (!seconds || isNaN(seconds)) return '00:00';
