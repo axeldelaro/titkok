@@ -1,6 +1,58 @@
 /* Mobile-first responsive adjustments */
 
 @media (max-width: 768px) {
+
+    /* ── OVERFLOW CONTAINMENT ── */
+    html,
+    body,
+    #app {
+        overflow-x: hidden !important;
+        max-width: 100vw !important;
+        width: 100% !important;
+    }
+
+    .header {
+        padding: 0 0.5rem;
+        gap: 0.35rem;
+        overflow: hidden;
+    }
+
+    /* Force all header children to shrink */
+    .header>* {
+        min-width: 0;
+        flex-shrink: 1;
+    }
+
+    .header>div:first-child {
+        flex-shrink: 0;
+        gap: 0.4rem;
+    }
+
+    /* Search bar must shrink on mobile */
+    .header>div:nth-child(2) {
+        flex: 1;
+        min-width: 0;
+        max-width: 100%;
+        margin: 0 0.25rem;
+    }
+
+    /* Right side actions must not overflow */
+    .header>div:last-child {
+        flex-shrink: 0;
+        gap: 0.35rem;
+    }
+
+    .content {
+        overflow-x: hidden;
+        max-width: 100vw;
+        word-break: break-word;
+    }
+
+    .main-container {
+        overflow-x: hidden;
+        max-width: 100vw;
+    }
+
     .sidebar {
         position: fixed;
         bottom: 0;
@@ -277,6 +329,29 @@
         bottom: 80px;
     }
 
+    /* ── Hypno config modal — adapt for mobile ── */
+    .hypno-config-modal {
+        max-width: 100% !important;
+        width: 100% !important;
+        max-height: 90vh !important;
+        border-radius: 0 !important;
+    }
+
+    .hypno-effects-grid {
+        grid-template-columns: 1fr;
+        gap: 8px;
+    }
+
+    .hypno-preview-box {
+        width: 38px;
+        height: 38px;
+    }
+
+    .hypno-effect-card {
+        padding: 8px;
+        gap: 8px;
+    }
+
     /* ── Skeleton cards — single column ── */
     .skeleton-grid {
         grid-template-columns: 1fr;
@@ -285,13 +360,23 @@
 
 @media (max-width: 480px) {
     .header {
-        padding: 0 0.5rem;
-        gap: 0.5rem;
+        padding: 0 0.35rem;
+        gap: 0.25rem;
     }
 
-    /* Hide search bar text on small phones, keep icon only */
+    /* Hide brand text on small phones — keep icon only */
+    .brand-text {
+        display: none;
+    }
+
+    /* Search bar compact */
     .search-bar-wrapper {
-        max-width: 140px;
+        max-width: 120px;
+        padding: 0.3rem 0.6rem;
+    }
+
+    .search-input {
+        font-size: 0.85rem;
     }
 
     .profile-header {
@@ -312,21 +397,60 @@
     /* Navbar avatar smaller */
     .nav-avatar,
     .nav-avatar-placeholder {
-        width: 30px;
-        height: 30px;
-        font-size: 0.8rem;
+        width: 28px;
+        height: 28px;
+        font-size: 0.75rem;
     }
 
     /* Extra small action buttons */
     .nav-action-btn {
-        width: 32px;
-        height: 32px;
-        font-size: 0.9rem;
+        width: 30px;
+        height: 30px;
+        font-size: 0.85rem;
     }
 
-    /* Loop button hide on tiny screens to save space */
+    /* Hide less important buttons on very small phones */
+    #notif-btn {
+        display: none;
+    }
+
+    .filter-btn {
+        display: none;
+    }
+
+    .download-btn {
+        display: none;
+    }
+
+    /* Loop button hide on tiny screens */
     .loop-btn {
         display: none;
+    }
+
+    /* Video page wrapper */
+    .video-page-wrapper {
+        overflow-x: hidden;
+        max-width: 100vw;
+    }
+
+    /* Modal overflow fix */
+    .modal-content {
+        max-width: calc(100vw - 2rem) !important;
+        overflow-x: hidden;
+    }
+
+    /* Sidebar bottom bar: smaller items */
+    .sidebar-link {
+        padding: 0.3rem;
+    }
+
+    .nav-icon {
+        font-size: 1rem;
+    }
+
+    .nav-label {
+        font-size: 0.55rem;
+        max-width: 40px;
     }
 }
 

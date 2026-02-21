@@ -19,12 +19,14 @@ export default class Player {
             { name: 'None', css: 'none' },
             { name: 'Grayscale', css: 'grayscale(1)' },
             { name: 'Sepia', css: 'sepia(1)' },
-            { name: 'Invert', css: 'invert(1)' },
+            { name: 'Invert (Full)', css: 'invert(1)' },
+            { name: 'Invert (Light)', css: 'invert(1) hue-rotate(180deg)' },
             { name: 'Saturate', css: 'saturate(2.5)' },
             { name: 'High Contrast', css: 'contrast(1.8)' },
             { name: 'Warm', css: 'sepia(0.4) saturate(1.5) brightness(1.1)' },
             { name: 'Cool', css: 'hue-rotate(180deg) saturate(1.3)' },
-            { name: 'Vintage', css: 'sepia(0.6) contrast(1.1) brightness(0.9)' }
+            { name: 'Vintage', css: 'sepia(0.6) contrast(1.1) brightness(0.9)' },
+            { name: 'Negative', css: 'invert(1) contrast(1.3)' }
         ];
         // Feature: Cinema Mode (#11)
         this._cinemaMode = false;

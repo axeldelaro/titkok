@@ -1230,45 +1230,86 @@ const UI = {
                 const container = document.createElement('div');
                 container.style.padding = '10px';
 
-                const categories = {
-                    'Visual / Chill': ['scanlines', 'rgbShift', 'pixelate', 'colorCycle', 'textSubliminal', 'breathe', 'tilt', 'mirror'],
-                    'Intense / Chaos': ['kaleidoscope', 'liquidWarp', 'vortex', 'strobe', 'doubleVision', 'tunnel', 'verticalStretch', 'glitch']
+                // Effect definitions with icons, descriptions, and preview CSS
+                const effects = {
+                    'Visual / Chill': [
+                        { key: 'scanlines', icon: '📺', desc: 'CRT scanlines overlay', preview: 'background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.3) 2px,rgba(0,0,0,0.3) 4px);' },
+                        { key: 'rgbShift', icon: '🌈', desc: 'RGB color split', preview: 'box-shadow:2px 0 #f0f,-2px 0 #0ff;' },
+                        { key: 'pixelate', icon: '🟩', desc: 'Pixel mosaic effect', preview: 'image-rendering:pixelated;background-size:8px 8px;background-image:repeating-conic-gradient(#333 0% 25%,#555 0% 50%);' },
+                        { key: 'textSubliminal', icon: '👁️', desc: 'Flash hidden words', preview: '' },
+                        { key: 'breathe', icon: '🫁', desc: 'Breathing pulse', preview: 'animation:hypnoPreviewBreathe 2s ease-in-out infinite;' },
+                        { key: 'tilt', icon: '📐', desc: 'Subtle tilt shifts', preview: 'transform:rotate(3deg);' },
+                        { key: 'mirror', icon: '🪞', desc: 'Mirror flip axis', preview: 'transform:scaleX(-1);' },
+                        { key: 'colorCycle', icon: '🎡', desc: 'Hue rotation cycle', preview: 'animation:hypnoPreviewHue 2s linear infinite;' }
+                    ],
+                    'Intense / Chaos': [
+                        { key: 'glitch', icon: '⚡', desc: 'Screen glitch bursts', preview: 'animation:hypnoPreviewGlitch 0.3s infinite;' },
+                        { key: 'strobe', icon: '💡', desc: 'Flash strobe', preview: 'animation:hypnoPreviewStrobe 0.5s infinite;' },
+                        { key: 'doubleVision', icon: '👓', desc: 'Double vision ghosting', preview: 'box-shadow:3px 3px 0 rgba(255,100,100,0.5),-3px -3px 0 rgba(100,100,255,0.5);' },
+                        { key: 'tunnel', icon: '🌀', desc: 'Tunnel vortex overlay', preview: 'background:radial-gradient(circle,transparent 30%,rgba(0,0,0,0.8) 100%);' },
+                        { key: 'verticalStretch', icon: '↕️', desc: 'Screen stretch warp', preview: 'transform:scaleY(1.3);' },
+                    ],
+                    'Advanced ⚠️': [
+                        { key: 'kaleidoscope', icon: '🔮', desc: 'Kaleidoscope fractal', preview: 'background:conic-gradient(from 0deg,#f0f,#0ff,#ff0,#f0f);' },
+                        { key: 'liquidWarp', icon: '🌊', desc: 'Liquid distortion', preview: 'animation:hypnoPreviewLiquid 2s ease-in-out infinite;border-radius:30% 70% 70% 30% / 30% 30% 70% 70%;' },
+                        { key: 'vortex', icon: '🌪️', desc: 'Spin vortex (motion!)', preview: 'animation:hypnoPreviewVortex 2s linear infinite;' }
+                    ]
                 };
 
-                for (const [title, keys] of Object.entries(categories)) {
+                for (const [title, items] of Object.entries(effects)) {
                     const h3 = document.createElement('h3');
                     h3.textContent = title;
-                    h3.style.cssText = 'color:var(--text-secondary); font-size:0.9rem; margin:15px 0 10px; text-transform:uppercase; letter-spacing:1px; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:5px;';
+                    h3.style.cssText = 'color:var(--text-secondary);font-size:0.85rem;margin:18px 0 10px;text-transform:uppercase;letter-spacing:1.5px;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:6px;';
                     container.appendChild(h3);
 
-                    const group = document.createElement('div');
-                    group.className = 'hypno-config-group';
+                    const grid = document.createElement('div');
+                    grid.className = 'hypno-effects-grid';
 
-                    keys.forEach(key => {
-                        const label = document.createElement('label');
-                        label.className = 'hypno-checkbox-label';
+                    items.forEach(effect => {
+                        const card = document.createElement('div');
+                        card.className = 'hypno-effect-card' + (config[effect.key] !== false ? ' active' : '');
 
-                        const input = document.createElement('input');
-                        input.type = 'checkbox';
-                        input.checked = config[key] !== false;
-                        input.onchange = (e) => updateConfig({ [key]: e.target.checked });
+                        // Preview box
+                        const previewBox = document.createElement('div');
+                        previewBox.className = 'hypno-preview-box';
+                        if (effect.preview) {
+                            previewBox.style.cssText = effect.preview;
+                        }
+                        // Subliminal text special preview
+                        if (effect.key === 'textSubliminal') {
+                            previewBox.className += ' hypno-preview-text';
+                            previewBox.innerHTML = '<span>OBEY</span>';
+                        }
 
-                        const text = document.createElement('span');
-                        // Format camelCase to Title Case
-                        text.textContent = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+                        // Info
+                        const info = document.createElement('div');
+                        info.className = 'hypno-effect-info';
+                        info.innerHTML = `
+                            <div class="hypno-effect-name">${effect.icon} ${effect.key.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase())}</div>
+                            <div class="hypno-effect-desc">${effect.desc}</div>
+                        `;
 
-                        label.appendChild(input);
-                        label.appendChild(text);
-                        group.appendChild(label);
+                        // Toggle switch
+                        const toggle = document.createElement('label');
+                        toggle.className = 'hypno-toggle-switch';
+                        toggle.innerHTML = `<input type="checkbox" ${config[effect.key] !== false ? 'checked' : ''}><span class="hypno-slider"></span>`;
+                        toggle.querySelector('input').onchange = (e) => {
+                            updateConfig({ [effect.key]: e.target.checked });
+                            card.classList.toggle('active', e.target.checked);
+                        };
+
+                        card.appendChild(previewBox);
+                        card.appendChild(info);
+                        card.appendChild(toggle);
+                        grid.appendChild(card);
                     });
-                    container.appendChild(group);
+                    container.appendChild(grid);
                 }
 
-                const modal = Modal('Hypno Configuration', '');
+                const modal = Modal('🌀 Hypno Configuration', '');
                 const body = modal.querySelector('.modal-body');
-                body.innerHTML = ''; // clear default content if any
+                body.innerHTML = '';
                 body.appendChild(container);
-                // Make modal wider/custom
                 modal.querySelector('.modal-content').classList.add('hypno-config-modal');
                 document.body.appendChild(modal);
             };

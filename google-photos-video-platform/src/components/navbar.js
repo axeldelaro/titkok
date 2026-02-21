@@ -11,22 +11,22 @@ export default function Navbar() {
     const user = Store.get('user');
 
     nav.innerHTML = `
-        <div style="display: flex; align-items: center; gap: 1rem;">
-            <button id="menu-toggle" aria-label="Toggle Menu" style="font-size: 1.5rem;">☰</button>
-            <a href="#/" style="font-weight: bold; font-size: 1.2rem; display: flex; align-items: center; gap: 0.5rem;">
-                <span style="color: var(--primary-color);">▶</span> CloudStream
+        <div style="display:flex;align-items:center;gap:0.5rem;flex-shrink:0;">
+            <button id="menu-toggle" aria-label="Toggle Menu" style="font-size:1.5rem;flex-shrink:0;">☰</button>
+            <a href="#/" class="nav-brand" style="font-weight:bold;font-size:1.1rem;display:flex;align-items:center;gap:0.3rem;white-space:nowrap;">
+                <span style="color:var(--primary-color);">▶</span><span class="brand-text">CloudStream</span>
             </a>
         </div>
         
-        <div style="flex: 1; max-width: 600px; margin: 0 1rem;">
+        <div style="flex:1;min-width:0;max-width:500px;margin:0 0.25rem;">
             <div class="search-bar-wrapper">
                 <span class="search-icon">🔍</span>
-                <input type="text" id="search-input" placeholder="Search videos..." class="search-input">
+                <input type="text" id="search-input" placeholder="Search..." class="search-input">
                 <kbd class="search-kbd">/</kbd>
             </div>
         </div>
 
-        <div style="display: flex; align-items: center; gap: 0.75rem;">
+        <div style="display:flex;align-items:center;gap:0.4rem;flex-shrink:0;">
             ${isAuth
             ? `<button id="upload-btn" class="nav-action-btn" title="Upload">
                        <span>📹</span>

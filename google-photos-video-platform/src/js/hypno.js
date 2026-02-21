@@ -326,12 +326,12 @@ const runGame = (popup, img, type) => {
             if (!canDodge || now - lastDodge < 400) return;
             lastDodge = now;
 
-            const maxX = window.innerWidth - popup.offsetWidth;
-            const maxY = window.innerHeight - popup.offsetHeight;
+            const maxX = Math.max(0, window.innerWidth - popup.offsetWidth - 10);
+            const maxY = Math.max(0, window.innerHeight - popup.offsetHeight - 10);
 
             if (Math.random() > 0.3) {
-                popup.style.left = Math.max(0, Math.min(maxX, Math.random() * maxX)) + 'px';
-                popup.style.top = Math.max(0, Math.min(maxY, Math.random() * maxY)) + 'px';
+                popup.style.left = Math.max(10, Math.min(maxX, Math.random() * maxX)) + 'px';
+                popup.style.top = Math.max(10, Math.min(maxY, Math.random() * maxY)) + 'px';
             }
         };
 
@@ -465,9 +465,13 @@ function spawnPopup() {
 
     const isGame = Math.random() < 0.05; // 5% chance of game
 
-    const size = isGame ? (150 + Math.random() * 100) : (100 + Math.random() * 250);
-    const x = Math.random() * (window.innerWidth - size);
-    const y = Math.random() * (window.innerHeight - size);
+    const maxW = window.innerWidth;
+    const maxH = window.innerHeight;
+    const size = isGame
+        ? Math.min(150 + Math.random() * 100, maxW - 20)
+        : Math.min(100 + Math.random() * 250, maxW - 20);
+    const x = Math.max(10, Math.min(Math.random() * (maxW - size), maxW - size - 10));
+    const y = Math.max(10, Math.min(Math.random() * (maxH - size), maxH - size - 10));
 
     if (!isGame) {
         // FLEET
