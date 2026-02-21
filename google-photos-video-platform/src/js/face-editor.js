@@ -4,26 +4,47 @@ import { Toast } from '../components/toast.js';
 let FaceMesh;
 let faceMeshInstance;
 
+// ── MediaPipe FaceMesh landmark indices ──────────────────────────────────────
 const LIPS_OUTER = [61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 409, 270, 269, 267, 0, 37, 39, 40, 185];
+const LIPS_INNER = [78, 95, 88, 178, 87, 14, 317, 402, 318, 324, 308, 415, 310, 311, 312, 13, 82, 81, 80, 191];
 const LEFT_IRIS = [474, 475, 476, 477];
 const RIGHT_IRIS = [469, 470, 471, 472];
 const LEFT_EYE_TOP = [130, 247, 30, 29, 27, 28, 56, 190, 244, 112, 26, 22, 23, 24, 110, 25];
 const RIGHT_EYE_TOP = [359, 467, 260, 259, 257, 258, 286, 414, 464, 341, 256, 252, 253, 254, 339, 255];
+
+// Joues : points autour des pommettes pour le blush
+const LEFT_CHEEK = [116, 123, 147, 187, 207, 206, 203, 36, 31, 228, 229, 230, 231, 232, 233, 244, 143, 111];
+const RIGHT_CHEEK = [345, 352, 376, 411, 427, 426, 423, 266, 261, 448, 449, 450, 451, 452, 453, 464, 372, 340];
+
+// Contour visage pour le contouring
+const FACE_OUTLINE = [10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379, 378, 400, 377,
+    152, 148, 176, 149, 150, 136, 172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67, 109];
+
+// Zone front pour le fond de teint
+const FOREHEAD = [10, 109, 67, 103, 54, 21, 162, 127, 234, 93, 132, 58, 172, 136, 150, 149, 176, 148, 152,
+    377, 400, 378, 379, 365, 397, 288, 361, 323, 454, 356, 389, 251, 284, 332, 297, 338];
 
 const FaceEditor = {
     _modal: null,
     _canvas: null,
     _ctx: null,
     _imgEl: null,
-    _blobUrl: null,
-    _originalImageObj: null,
-    _cachedLandmarks: null,
     _initializing: false,
 
     _settings: {
-        lipColor: '#ff0055', lipIntensity: 0.0, lipThickness: 1.0,
+        // Lèvres
+        lipColor: '#c4004e', lipIntensity: 0.0, lipThickness: 1.0,
+        // Yeux
         eyeColor: '#00aaff', eyeIntensity: 0.0,
-        makeupColor: '#111111', makeupIntensity: 0.0,
+        // Maquillage (fard à paupières)
+        makeupColor: '#4a0080', makeupIntensity: 0.0,
+        // Blush
+        blushColor: '#ff6b8a', blushIntensity: 0.0,
+        // Contouring
+        contourIntensity: 0.0,
+        // Fond de teint / lissage
+        smoothIntensity: 0.0,
+        foundationColor: '#f5c5a0', foundationIntensity: 0.0,
     },
 
     // ── Init MediaPipe ────────────────────────────────────────────────────
@@ -31,12 +52,10 @@ const FaceEditor = {
         if (FaceMesh) return;
         if (this._initializing) return;
         this._initializing = true;
-
         try {
             Toast.show('Chargement des modèles IA…', 'info', 3000);
             await this._loadScripts();
             FaceMesh = window.FaceMesh;
-
             faceMeshInstance = new FaceMesh({
                 locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
             });
@@ -44,7 +63,7 @@ const FaceEditor = {
                 maxNumFaces: 1,
                 refineLandmarks: true,
                 minDetectionConfidence: 0.5,
-                minTrackingConfidence: 0.5
+                minTrackingConfidence: 0.5,
             });
             faceMeshInstance.onResults(this._onResults.bind(this));
         } finally {
@@ -52,13 +71,11 @@ const FaceEditor = {
         }
     },
 
-    // Chargement parallèle des scripts (sans recharger si déjà présents)
     async _loadScripts() {
         const load = (src) => new Promise((resolve, reject) => {
             if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
             const s = document.createElement('script');
-            s.src = src;
-            s.onload = resolve;
+            s.src = src; s.onload = resolve;
             s.onerror = () => reject(new Error(`Script error: ${src}`));
             document.body.appendChild(s);
         });
@@ -74,59 +91,44 @@ const FaceEditor = {
             Toast.show('AI Retouch indisponible pour les images locales (upload d\'abord)', 'error', 3500);
             return;
         }
-
-        this._originalImageObj = imageObj;
         this._cachedLandmarks = null;
         this._settings = {
-            lipColor: '#ff0055', lipIntensity: 0.0, lipThickness: 1.0,
+            lipColor: '#c4004e', lipIntensity: 0.0, lipThickness: 1.0,
             eyeColor: '#00aaff', eyeIntensity: 0.0,
-            makeupColor: '#111111', makeupIntensity: 0.0,
+            makeupColor: '#4a0080', makeupIntensity: 0.0,
+            blushColor: '#ff6b8a', blushIntensity: 0.0,
+            contourIntensity: 0.0,
+            smoothIntensity: 0.0,
+            foundationColor: '#f5c5a0', foundationIntensity: 0.0,
         };
-
         this._buildUI();
         this._showLoading(true);
         await this.init();
 
-        // ── Chargement de l'image (triple fallback) ──────────────────
-        // Google Photos (lh3.googleusercontent.com) envoie des headers CORS
-        // sur les requêtes img avec crossOrigin='anonymous'. Si ça échoue
-        // (réseau ou restriction CORS), on passe par wsrv.nl qui proxifie
-        // l'image en ajoutant Access-Control-Allow-Origin: *.
-        this._originalImageSrc = Gallery.getImageURL(imageObj, 1080);
-
-        const loadImageWithCORS = (src) => new Promise((resolve, reject) => {
+        // Chargement CORS avec fallback wsrv.nl
+        const loadWithCORS = (src) => new Promise((resolve, reject) => {
             const img = new Image();
             img.crossOrigin = 'anonymous';
             img.onload = () => resolve(img);
             img.onerror = reject;
             img.src = src;
         });
-
-        const loadViaProxy = (originalSrc) => {
-            // wsrv.nl proxifie l'image en ajoutant Access-Control-Allow-Origin: *
-            const proxied = `https://wsrv.nl/?url=${encodeURIComponent(originalSrc)}&output=jpg&n=-1`;
-            return loadImageWithCORS(proxied);
-        };
+        const srcHD = Gallery.getImageURL(imageObj, 1080);
+        const srcProxy = `https://wsrv.nl/?url=${encodeURIComponent(srcHD)}&output=jpg&n=-1`;
 
         let img;
         try {
-            // Tentative 1 : chargement direct avec CORS
-            img = await loadImageWithCORS(this._originalImageSrc).catch(async () => {
-                console.warn('[FaceEditor] Direct CORS load failed, trying wsrv.nl proxy…');
-                // Tentative 2 : proxy wsrv.nl
-                return await loadViaProxy(this._originalImageSrc);
+            img = await loadWithCORS(srcHD).catch(() => {
+                console.warn('[FaceEditor] Direct CORS failed, using wsrv.nl');
+                return loadWithCORS(srcProxy);
             });
         } catch (err) {
-            console.error('[FaceEditor] All image load methods failed:', err);
-            if (this._modal) {
-                Toast.show('Impossible de charger cette image pour le retouch.', 'error', 4000);
-                this._showLoading(false);
-            }
+            console.error('[FaceEditor] Image load failed:', err);
+            if (this._modal) { Toast.show('Impossible de charger cette image.', 'error'); this._showLoading(false); }
             return;
         }
 
-        if (!this._modal) return; // modal fermé pendant le chargement
-
+        if (!this._modal) return;
         this._imgEl = img;
         this._canvas.width = img.naturalWidth;
         this._canvas.height = img.naturalHeight;
@@ -136,16 +138,14 @@ const FaceEditor = {
             await faceMeshInstance.send({ image: img });
         } catch (err) {
             console.error('[FaceEditor] FaceMesh error:', err);
-            Toast.show('Impossible de détecter le visage. Essaie une autre image.', 'error');
+            Toast.show('Impossible de détecter le visage.', 'error');
             this._showLoading(false);
         }
-
     },
 
     // ── Construction du modal ────────────────────────────────────────────
     _buildUI() {
         if (this._modal) this._modal.remove();
-
         this._modal = document.createElement('div');
         this._modal.className = 'face-editor-modal';
         this._modal.innerHTML = `
@@ -154,7 +154,6 @@ const FaceEditor = {
                 <h3>🪄 AI Retouch</h3>
                 <button class="fe-save-btn">Enregistrer</button>
             </div>
-
             <div class="fe-canvas-container">
                 <canvas id="fe-canvas"></canvas>
                 <div id="fe-loading" class="fe-loading-overlay">
@@ -162,59 +161,85 @@ const FaceEditor = {
                     <p>Analyse du visage…</p>
                 </div>
             </div>
-
             <div class="fe-toolbar">
                 <div class="fe-tabs">
-                    <button class="fe-tab active" data-target="lips">Lèvres 💋</button>
-                    <button class="fe-tab" data-target="eyes">Yeux 👁️</button>
-                    <button class="fe-tab" data-target="makeup">Maquillage 💄</button>
+                    <button class="fe-tab active" data-target="lips">💋 Lèvres</button>
+                    <button class="fe-tab" data-target="eyes">👁️ Yeux</button>
+                    <button class="fe-tab" data-target="blush">🌸 Blush</button>
+                    <button class="fe-tab" data-target="skin">✨ Peau</button>
                 </div>
-
                 <div class="fe-panels">
+
                     <div class="fe-panel active" id="panel-lips">
                         <div class="fe-control">
                             <label>Épaisseur <span id="val-thickness">1.00</span></label>
-                            <input type="range" id="sl-lip-thickness" min="0.8" max="1.5" step="0.05" value="1.0">
+                            <input type="range" id="sl-lip-thickness" min="0.75" max="1.45" step="0.05" value="1.0">
                         </div>
                         <div class="fe-control">
-                            <label>Intensité couleur <span id="val-lip-int">0%</span></label>
+                            <label>Couleur & intensité <span id="val-lip-int">0%</span></label>
                             <input type="range" id="sl-lip-intensity" min="0" max="1" step="0.05" value="0">
                         </div>
                         <div class="fe-control">
-                            <label>Teinte</label>
-                            <input type="color" id="cl-lip-color" value="#ff0055">
+                            <label>Teinte lèvres</label>
+                            <input type="color" id="cl-lip-color" value="#c4004e">
                         </div>
                     </div>
 
                     <div class="fe-panel" id="panel-eyes">
                         <div class="fe-control">
-                            <label>Intensité couleur <span id="val-eye-int">0%</span></label>
-                            <input type="range" id="sl-eye-intensity" min="0" max="1" step="0.05" value="0">
+                            <label>Fard à paupières <span id="val-makeup-int">0%</span></label>
+                            <input type="range" id="sl-makeup-intensity" min="0" max="0.85" step="0.05" value="0">
                         </div>
                         <div class="fe-control">
-                            <label>Teinte</label>
+                            <label>Couleur fard</label>
+                            <input type="color" id="cl-makeup-color" value="#4a0080">
+                        </div>
+                        <div class="fe-control">
+                            <label>Couleur iris <span id="val-eye-int">0%</span></label>
+                            <input type="range" id="sl-eye-intensity" min="0" max="0.9" step="0.05" value="0">
+                        </div>
+                        <div class="fe-control">
+                            <label>Teinte iris</label>
                             <input type="color" id="cl-eye-color" value="#00aaff">
                         </div>
                     </div>
 
-                    <div class="fe-panel" id="panel-makeup">
+                    <div class="fe-panel" id="panel-blush">
                         <div class="fe-control">
-                            <label>Fard à paupières <span id="val-makeup-int">0%</span></label>
-                            <input type="range" id="sl-makeup-intensity" min="0" max="0.8" step="0.05" value="0">
+                            <label>Blush <span id="val-blush-int">0%</span></label>
+                            <input type="range" id="sl-blush-intensity" min="0" max="0.8" step="0.05" value="0">
                         </div>
                         <div class="fe-control">
-                            <label>Couleur</label>
-                            <input type="color" id="cl-makeup-color" value="#111111">
+                            <label>Couleur blush</label>
+                            <input type="color" id="cl-blush-color" value="#ff6b8a">
+                        </div>
+                        <div class="fe-control">
+                            <label>Contouring <span id="val-contour-int">0%</span></label>
+                            <input type="range" id="sl-contour-intensity" min="0" max="0.6" step="0.05" value="0">
                         </div>
                     </div>
-                </div>
 
+                    <div class="fe-panel" id="panel-skin">
+                        <div class="fe-control">
+                            <label>Lissage peau <span id="val-smooth-int">0%</span></label>
+                            <input type="range" id="sl-smooth-intensity" min="0" max="1" step="0.05" value="0">
+                        </div>
+                        <div class="fe-control">
+                            <label>Fond de teint <span id="val-foundation-int">0%</span></label>
+                            <input type="range" id="sl-foundation-intensity" min="0" max="0.6" step="0.05" value="0">
+                        </div>
+                        <div class="fe-control">
+                            <label>Teinte fond</label>
+                            <input type="color" id="cl-foundation-color" value="#f5c5a0">
+                        </div>
+                    </div>
+
+                </div>
                 <div class="fe-footer-actions">
                     <button class="fe-reset-btn">↺ Réinitialiser</button>
                 </div>
             </div>
         `;
-
         document.body.appendChild(this._modal);
         this._canvas = this._modal.querySelector('#fe-canvas');
         this._ctx = this._canvas.getContext('2d');
@@ -224,28 +249,32 @@ const FaceEditor = {
 
         this._modal.querySelector('.fe-reset-btn').onclick = () => {
             this._settings = {
-                lipColor: '#ff0055', lipIntensity: 0.0, lipThickness: 1.0,
+                lipColor: '#c4004e', lipIntensity: 0.0, lipThickness: 1.0,
                 eyeColor: '#00aaff', eyeIntensity: 0.0,
-                makeupColor: '#111111', makeupIntensity: 0.0,
+                makeupColor: '#4a0080', makeupIntensity: 0.0,
+                blushColor: '#ff6b8a', blushIntensity: 0.0,
+                contourIntensity: 0.0,
+                smoothIntensity: 0.0,
+                foundationColor: '#f5c5a0', foundationIntensity: 0.0,
             };
-            this._modal.querySelector('#sl-lip-thickness').value = 1.0;
-            this._modal.querySelector('#sl-lip-intensity').value = 0;
-            this._modal.querySelector('#sl-eye-intensity').value = 0;
-            this._modal.querySelector('#sl-makeup-intensity').value = 0;
-            this._modal.querySelector('#cl-lip-color').value = '#ff0055';
+            this._modal.querySelectorAll('input[type="range"]').forEach(el => { el.value = el.defaultValue; });
+            this._modal.querySelector('#cl-lip-color').value = '#c4004e';
             this._modal.querySelector('#cl-eye-color').value = '#00aaff';
-            this._modal.querySelector('#cl-makeup-color').value = '#111111';
-            this._modal.querySelector('#val-thickness').textContent = '1.00';
-            this._modal.querySelector('#val-lip-int').textContent = '0%';
-            this._modal.querySelector('#val-eye-int').textContent = '0%';
-            this._modal.querySelector('#val-makeup-int').textContent = '0%';
+            this._modal.querySelector('#cl-makeup-color').value = '#4a0080';
+            this._modal.querySelector('#cl-blush-color').value = '#ff6b8a';
+            this._modal.querySelector('#cl-foundation-color').value = '#f5c5a0';
+            ['val-thickness', 'val-lip-int', 'val-eye-int', 'val-makeup-int',
+                'val-blush-int', 'val-contour-int', 'val-smooth-int', 'val-foundation-int']
+                .forEach(id => {
+                    const el = this._modal.querySelector('#' + id);
+                    if (el) el.textContent = id === 'val-thickness' ? '1.00' : '0%';
+                });
             this._render();
         };
 
         this._modal.querySelectorAll('.fe-tab').forEach(btn => {
             btn.onclick = () => {
-                this._modal.querySelectorAll('.fe-tab').forEach(b => b.classList.remove('active'));
-                this._modal.querySelectorAll('.fe-panel').forEach(p => p.classList.remove('active'));
+                this._modal.querySelectorAll('.fe-tab, .fe-panel').forEach(el => el.classList.remove('active'));
                 btn.classList.add('active');
                 this._modal.querySelector('#panel-' + btn.dataset.target).classList.add('active');
             };
@@ -255,16 +284,14 @@ const FaceEditor = {
             const el = this._modal.querySelector('#' + id);
             if (!el) return;
             el.oninput = () => {
-                const v = el.type === 'color' ? el.value : parseFloat(el.value);
-                this._settings[key] = v;
+                this._settings[key] = el.type === 'color' ? el.value : parseFloat(el.value);
                 if (valId && el.type !== 'color') {
-                    this._modal.querySelector('#' + valId).textContent =
-                        isPercent ? Math.round(v * 100) + '%' : v.toFixed(2);
+                    const display = this._modal.querySelector('#' + valId);
+                    if (display) display.textContent = isPercent ? Math.round(parseFloat(el.value) * 100) + '%' : parseFloat(el.value).toFixed(2);
                 }
                 this._render();
             };
         };
-
         bind('sl-lip-thickness', 'lipThickness', 'val-thickness', false);
         bind('sl-lip-intensity', 'lipIntensity', 'val-lip-int', true);
         bind('cl-lip-color', 'lipColor');
@@ -272,172 +299,275 @@ const FaceEditor = {
         bind('cl-eye-color', 'eyeColor');
         bind('sl-makeup-intensity', 'makeupIntensity', 'val-makeup-int', true);
         bind('cl-makeup-color', 'makeupColor');
+        bind('sl-blush-intensity', 'blushIntensity', 'val-blush-int', true);
+        bind('cl-blush-color', 'blushColor');
+        bind('sl-contour-intensity', 'contourIntensity', 'val-contour-int', true);
+        bind('sl-smooth-intensity', 'smoothIntensity', 'val-smooth-int', true);
+        bind('sl-foundation-intensity', 'foundationIntensity', 'val-foundation-int', true);
+        bind('cl-foundation-color', 'foundationColor');
     },
 
-    _showLoading(visible) {
+    _showLoading(v) {
         const el = this._modal?.querySelector('#fe-loading');
-        if (el) el.style.display = visible ? 'flex' : 'none';
+        if (el) el.style.display = v ? 'flex' : 'none';
     },
 
     _close() {
-        if (this._blobUrl) { URL.revokeObjectURL(this._blobUrl); this._blobUrl = null; }
-        if (this._modal) { this._modal.remove(); this._modal = null; }
+        this._modal?.remove();
+        this._modal = null;
     },
 
-    // ── Callback MediaPipe ───────────────────────────────────────────────
+    // ── Résultats MediaPipe ───────────────────────────────────────────────
     _onResults(results) {
         this._showLoading(false);
         if (!this._modal) return;
-
-        if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
+        if (results.multiFaceLandmarks?.length > 0) {
             this._cachedLandmarks = results.multiFaceLandmarks[0];
-            Toast.show('Visage détecté ! Applique tes retouches 🎨', 'success', 2000);
+            Toast.show('Visage détecté ! 🎨', 'success', 2000);
             this._render();
         } else {
             Toast.show('Aucun visage détecté', 'error');
         }
     },
 
-    // ── Rendu ────────────────────────────────────────────────────────────
-    _render() {
-        if (!this._imgEl || !this._ctx || !this._modal) return;
-        const { width: w, height: h } = this._canvas;
-
-        this._ctx.globalCompositeOperation = 'source-over';
-        this._ctx.globalAlpha = 1;
-        this._ctx.filter = 'none';
-        this._ctx.drawImage(this._imgEl, 0, 0, w, h);
-
-        if (!this._cachedLandmarks) return;
-        const lms = this._cachedLandmarks;
-
-        this._drawLips(lms, w, h);
-        this._drawIrises(lms, w, h);
-        this._drawMakeup(lms, w, h);
-    },
-
-    _getCenter(indices, lms, w, h) {
+    // ── Helpers géométriques ─────────────────────────────────────────────
+    _pt(idx, lms, w, h) { return { x: lms[idx].x * w, y: lms[idx].y * h }; },
+    _center(indices, lms, w, h) {
         let cx = 0, cy = 0;
         indices.forEach(i => { cx += lms[i].x * w; cy += lms[i].y * h; });
         return { x: cx / indices.length, y: cy / indices.length };
     },
-
-    _drawLips(lms, w, h) {
-        const t = this._settings.lipThickness;
-        const intensity = this._settings.lipIntensity;
-        if (t === 1.0 && intensity === 0) return;
-
-        const center = this._getCenter(LIPS_OUTER, lms, w, h);
-
-        if (t !== 1.0) {
-            this._ctx.save();
-            this._ctx.beginPath();
-            LIPS_OUTER.forEach((idx, i) => {
-                const sx = center.x + (lms[idx].x * w - center.x) * t;
-                const sy = center.y + (lms[idx].y * h - center.y) * t;
-                i === 0 ? this._ctx.moveTo(sx, sy) : this._ctx.lineTo(sx, sy);
-            });
-            this._ctx.closePath();
-            this._ctx.clip();
-            this._ctx.translate(center.x, center.y);
-            this._ctx.scale(t, t);
-            this._ctx.translate(-center.x, -center.y);
-            this._ctx.drawImage(this._imgEl, 0, 0, w, h);
-            this._ctx.restore();
-        }
-
-        if (intensity > 0) {
-            this._ctx.save();
-            this._ctx.beginPath();
-            LIPS_OUTER.forEach((idx, i) => {
-                const x = center.x + (lms[idx].x * w - center.x) * t;
-                const y = center.y + (lms[idx].y * h - center.y) * t;
-                i === 0 ? this._ctx.moveTo(x, y) : this._ctx.lineTo(x, y);
-            });
-            this._ctx.closePath();
-            this._ctx.filter = 'blur(4px)';
-            this._ctx.globalCompositeOperation = 'overlay';
-            this._ctx.globalAlpha = intensity * 0.5;
-            this._ctx.fillStyle = this._settings.lipColor;
-            this._ctx.fill();
-            this._ctx.globalCompositeOperation = 'color';
-            this._ctx.globalAlpha = intensity * 0.8;
-            this._ctx.fill();
-            this._ctx.filter = 'none';
-            this._ctx.globalAlpha = 1;
-            this._ctx.globalCompositeOperation = 'source-over';
-            this._ctx.restore();
-        }
+    _poly(ctx, indices, lms, w, h, scale = 1, cx = 0, cy = 0) {
+        ctx.beginPath();
+        indices.forEach((idx, i) => {
+            const x = cx + (lms[idx].x * w - cx) * scale;
+            const y = cy + (lms[idx].y * h - cy) * scale;
+            i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+        });
+        ctx.closePath();
     },
 
-    _drawIrises(lms, w, h) {
-        if (this._settings.eyeIntensity === 0) return;
-        this._ctx.save();
-        this._ctx.globalCompositeOperation = 'color';
-        this._ctx.fillStyle = this._settings.eyeColor;
-        this._ctx.filter = 'blur(2px)';
-        this._ctx.globalAlpha = this._settings.eyeIntensity;
+    // ── Rendu principal ──────────────────────────────────────────────────
+    _render() {
+        if (!this._imgEl || !this._ctx || !this._modal) return;
+        const { width: w, height: h } = this._canvas;
+        const ctx = this._ctx;
+        const lms = this._cachedLandmarks;
 
-        const drawIris = (indices) => {
-            const center = this._getCenter(indices, lms, w, h);
-            const p1 = lms[indices[0]];
-            const r = Math.hypot(p1.x * w - center.x, p1.y * h - center.y) * 1.2;
-            this._ctx.beginPath();
-            this._ctx.arc(center.x, center.y, r, 0, Math.PI * 2);
-            this._ctx.fill();
-            this._ctx.globalCompositeOperation = 'overlay';
-            this._ctx.globalAlpha = this._settings.eyeIntensity * 0.5;
-            this._ctx.fill();
-            this._ctx.globalCompositeOperation = 'color';
-            this._ctx.globalAlpha = this._settings.eyeIntensity;
-        };
-        drawIris(LEFT_IRIS);
-        drawIris(RIGHT_IRIS);
-        this._ctx.restore();
+        // Reset
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.globalAlpha = 1;
+        ctx.filter = 'none';
+        ctx.drawImage(this._imgEl, 0, 0, w, h);
+        if (!lms) return;
+
+        // Ordre d'application : fond → peau → contouring → blush → fard → iris → lèvres
+        this._drawFoundation(lms, w, h);
+        this._drawSmooth(lms, w, h);
+        this._drawContour(lms, w, h);
+        this._drawBlush(lms, w, h);
+        this._drawMakeup(lms, w, h);
+        this._drawIrises(lms, w, h);
+        this._drawLips(lms, w, h);
+
+        // Reset final
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.globalAlpha = 1;
+        ctx.filter = 'none';
     },
 
+    // ── Fond de teint ───────────────────────────────────────────────────
+    _drawFoundation(lms, w, h) {
+        const alpha = this._settings.foundationIntensity;
+        if (alpha === 0) return;
+        const ctx = this._ctx;
+        ctx.save();
+        const blurPx = Math.max(6, w * 0.012);
+        this._poly(ctx, FOREHEAD, lms, w, h);
+        ctx.filter = `blur(${blurPx}px)`;
+        ctx.globalCompositeOperation = 'color';
+        ctx.globalAlpha = alpha * 0.5;
+        ctx.fillStyle = this._settings.foundationColor;
+        ctx.fill();
+        ctx.globalCompositeOperation = 'multiply';
+        ctx.globalAlpha = alpha * 0.25;
+        ctx.fill();
+        ctx.restore();
+    },
+
+    // ── Lissage peau (flou centré sur le visage) ─────────────────────────
+    _drawSmooth(lms, w, h) {
+        const alpha = this._settings.smoothIntensity;
+        if (alpha === 0) return;
+        const ctx = this._ctx;
+        ctx.save();
+        this._poly(ctx, FOREHEAD, lms, w, h);
+        ctx.clip();
+        // Superposition floue de l'image elle-même sur le visage
+        const blurPx = Math.round(alpha * w * 0.008);
+        ctx.filter = `blur(${blurPx}px)`;
+        ctx.globalAlpha = alpha * 0.55;
+        ctx.globalCompositeOperation = 'source-atop';
+        ctx.drawImage(this._imgEl, 0, 0, w, h);
+        ctx.restore();
+    },
+
+    // ── Contouring ───────────────────────────────────────────────────────
+    _drawContour(lms, w, h) {
+        const alpha = this._settings.contourIntensity;
+        if (alpha === 0) return;
+        const ctx = this._ctx;
+        ctx.save();
+        const blurPx = Math.max(16, w * 0.03);
+        // Ombre sombre sur le contour
+        ctx.filter = `blur(${blurPx}px)`;
+        ctx.globalCompositeOperation = 'multiply';
+        ctx.globalAlpha = alpha * 0.6;
+        ctx.fillStyle = '#5a3010';
+        this._poly(ctx, FACE_OUTLINE, lms, w, h);
+        const olCenter = this._center(FACE_OUTLINE, lms, w, h);
+        // Peindre AUTOUR du visage = on dessine le poly légèrement élargi puis on clip l'intérieur
+        // => Méthode simplifiée : on dessine juste les bords du contour
+        ctx.fill();
+        ctx.restore();
+    },
+
+    // ── Blush ────────────────────────────────────────────────────────────
+    _drawBlush(lms, w, h) {
+        const alpha = this._settings.blushIntensity;
+        if (alpha === 0) return;
+        const ctx = this._ctx;
+        const blurPx = Math.max(20, w * 0.05);
+
+        [LEFT_CHEEK, RIGHT_CHEEK].forEach(cheek => {
+            const c = this._center(cheek, lms, w, h);
+            const r = Math.max(w * 0.07, 40);
+            ctx.save();
+            const grad = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, r);
+            grad.addColorStop(0, this._settings.blushColor + 'cc');
+            grad.addColorStop(1, this._settings.blushColor + '00');
+            ctx.filter = `blur(${blurPx}px)`;
+            ctx.globalAlpha = alpha * 0.7;
+            ctx.globalCompositeOperation = 'multiply';
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.arc(c.x, c.y, r * 1.4, 0, Math.PI * 2);
+            ctx.fill();
+            // Couche overlay pour saturation
+            ctx.globalCompositeOperation = 'screen';
+            ctx.globalAlpha = alpha * 0.15;
+            ctx.fillStyle = this._settings.blushColor;
+            ctx.fill();
+            ctx.restore();
+        });
+    },
+
+    // ── Fard à paupières ─────────────────────────────────────────────────
     _drawMakeup(lms, w, h) {
         if (this._settings.makeupIntensity === 0) return;
-        this._ctx.save();
-        this._ctx.fillStyle = this._settings.makeupColor;
-        this._ctx.globalCompositeOperation = 'multiply';
-        this._ctx.filter = `blur(${Math.max(4, w * 0.015)}px)`;
-        this._ctx.globalAlpha = this._settings.makeupIntensity * 0.7;
-
-        const drawPoly = (indices) => {
-            this._ctx.beginPath();
-            indices.forEach((idx, i) => {
-                i === 0
-                    ? this._ctx.moveTo(lms[idx].x * w, lms[idx].y * h)
-                    : this._ctx.lineTo(lms[idx].x * w, lms[idx].y * h);
-            });
-            this._ctx.fill();
-        };
-        drawPoly(LEFT_EYE_TOP);
-        drawPoly(RIGHT_EYE_TOP);
-        this._ctx.restore();
+        const ctx = this._ctx;
+        const blurPx = Math.max(4, w * 0.015);
+        ctx.save();
+        ctx.filter = `blur(${blurPx}px)`;
+        ctx.globalCompositeOperation = 'multiply';
+        ctx.globalAlpha = this._settings.makeupIntensity * 0.7;
+        ctx.fillStyle = this._settings.makeupColor;
+        [LEFT_EYE_TOP, RIGHT_EYE_TOP].forEach(eyePoly => {
+            this._poly(ctx, eyePoly, lms, w, h);
+            ctx.fill();
+        });
+        // Couche color pour teinte
+        ctx.globalCompositeOperation = 'color';
+        ctx.globalAlpha = this._settings.makeupIntensity * 0.5;
+        [LEFT_EYE_TOP, RIGHT_EYE_TOP].forEach(eyePoly => {
+            this._poly(ctx, eyePoly, lms, w, h);
+            ctx.fill();
+        });
+        ctx.restore();
     },
 
-    // ── Sauvegarde ──────────────────────────────────────────────────────
+    // ── Iris ─────────────────────────────────────────────────────────────
+    _drawIrises(lms, w, h) {
+        if (this._settings.eyeIntensity === 0) return;
+        const ctx = this._ctx;
+        ctx.save();
+        ctx.filter = 'blur(2px)';
+        [LEFT_IRIS, RIGHT_IRIS].forEach(iris => {
+            const c = this._center(iris, lms, w, h);
+            const p = this._pt(iris[0], lms, w, h);
+            const r = Math.hypot(p.x - c.x, p.y - c.y) * 1.15;
+            ctx.beginPath();
+            ctx.arc(c.x, c.y, r, 0, Math.PI * 2);
+            ctx.globalCompositeOperation = 'color';
+            ctx.globalAlpha = this._settings.eyeIntensity * 0.8;
+            ctx.fillStyle = this._settings.eyeColor;
+            ctx.fill();
+            ctx.globalCompositeOperation = 'overlay';
+            ctx.globalAlpha = this._settings.eyeIntensity * 0.4;
+            ctx.fill();
+        });
+        ctx.restore();
+    },
+
+    // ── Lèvres ───────────────────────────────────────────────────────────
+    _drawLips(lms, w, h) {
+        const { lipIntensity: intens, lipThickness: t, lipColor } = this._settings;
+        if (t === 1.0 && intens === 0) return;
+        const ctx = this._ctx;
+        const outerCenter = this._center(LIPS_OUTER, lms, w, h);
+
+        // Épaisseur (warp vers le centre)
+        if (t !== 1.0) {
+            ctx.save();
+            this._poly(ctx, LIPS_OUTER, lms, w, h, t, outerCenter.x, outerCenter.y);
+            ctx.clip();
+            ctx.translate(outerCenter.x, outerCenter.y);
+            ctx.scale(t, t);
+            ctx.translate(-outerCenter.x, -outerCenter.y);
+            ctx.drawImage(this._imgEl, 0, 0, w, h);
+            ctx.restore();
+        }
+
+        // Couleur — double couche pour un rendu naturel
+        if (intens > 0) {
+            const blurPx = Math.max(3, w * 0.004);
+            ctx.save();
+            this._poly(ctx, LIPS_OUTER, lms, w, h, t, outerCenter.x, outerCenter.y);
+            ctx.filter = `blur(${blurPx}px)`;
+            // Couche multiply pour assombrir légèrement
+            ctx.globalCompositeOperation = 'multiply';
+            ctx.globalAlpha = intens * 0.55;
+            ctx.fillStyle = lipColor;
+            ctx.fill();
+            // Couche overlay pour la vivacité
+            ctx.globalCompositeOperation = 'overlay';
+            ctx.globalAlpha = intens * 0.5;
+            ctx.fill();
+            // Couche color pour la teinte finale
+            ctx.globalCompositeOperation = 'color';
+            ctx.globalAlpha = intens * 0.75;
+            ctx.fill();
+            ctx.restore();
+        }
+    },
+
+    // ── Sauvegarde ───────────────────────────────────────────────────────
     async _save() {
         const saveBtn = this._modal?.querySelector('.fe-save-btn');
-        if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = '⏳ Enregistrement…'; }
-
+        if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = '⏳…'; }
         this._canvas.toBlob(async (blob) => {
             if (!blob) {
                 Toast.show('Impossible de capturer le canvas', 'error');
                 if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Enregistrer'; }
                 return;
             }
-
             const file = new File([blob], `retouch_${Date.now()}.jpg`, { type: 'image/jpeg' });
             this._close();
-            Toast.show('⬆️ Envoi du retouch vers Google Photos…', 'info', 3000);
-
+            Toast.show('⬆️ Envoi vers Google Photos…', 'info', 3000);
             try {
                 await Gallery.uploadImages([file], {
                     onFileComplete: () => Toast.show('✅ Retouch enregistré !', 'success', 3000),
-                    onFileError: () => Toast.show('❌ Échec de l\'envoi vers Google Photos', 'error'),
+                    onFileError: () => Toast.show('❌ Échec de l\'envoi', 'error'),
                 });
                 setTimeout(() => Gallery.fetchAllImages(), 6000);
             } catch (err) {

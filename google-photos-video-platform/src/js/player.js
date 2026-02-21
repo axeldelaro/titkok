@@ -137,6 +137,11 @@ export default class Player {
             }
             // Feature #2: Restore progress
             this._restoreProgress();
+            // Mettre à jour l'affichage de la durée dès que disponible
+            const timeDisplay = this.controls.querySelector('.time-display');
+            if (timeDisplay && this.video.duration && !isNaN(this.video.duration)) {
+                timeDisplay.textContent = `${this.formatTime(this.video.currentTime)} / ${this.formatTime(this.video.duration)}`;
+            }
             // Auto-unmute: try to unmute with sound once video is ready
             if (this.video.muted) {
                 try {
@@ -144,7 +149,7 @@ export default class Player {
                     this.video.volume = 0.5;
                     const muteBtn = this.controls.querySelector('.mute-btn');
                     const volumeSlider = this.controls.querySelector('.volume-slider');
-                    if (muteBtn) muteBtn.textContent = '\ud83d\udd09';
+                    if (muteBtn) muteBtn.textContent = '🔉';
                     if (volumeSlider) volumeSlider.value = 0.5;
                 } catch (e) { /* browser blocked unmute */ }
             }
@@ -155,6 +160,7 @@ export default class Player {
         this.video.addEventListener('playing', onReady);
         this.video.addEventListener('loadeddata', onReady);
         this.video.addEventListener('loadedmetadata', onReady);
+
 
         this.video.addEventListener('error', () => {
             if (this.video.src && this.video.src !== window.location.href) {

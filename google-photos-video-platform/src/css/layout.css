@@ -203,6 +203,8 @@
     bottom: 0;
     left: 0;
     right: 0;
+    z-index: 10;
+    /* FIX: doit passer au-dessus du canvas delay (z-index:2) */
     background: linear-gradient(transparent, rgba(0, 0, 0, 0.85));
     padding: 1rem;
     opacity: 0;
@@ -289,16 +291,29 @@
 }
 
 .controls-row button {
-    color: white;
+    color: #fff;
     font-size: 1.2rem;
-    background: transparent;
+    background: rgba(255, 255, 255, 0.12);
     border: none;
+    border-radius: 6px;
+    padding: 4px 8px;
     cursor: pointer;
-    transition: transform 0.1s;
+    transition: transform 0.1s, background 0.15s;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
 }
 
-.controls-row button:hover {
-    transform: scale(1.15);
+.controls-row button:hover,
+.controls-row button:focus-visible {
+    background: rgba(255, 255, 255, 0.25);
+    transform: scale(1.1);
+}
+
+/* Bouton Play plus proéminent */
+.controls-row .play-btn {
+    font-size: 1.4rem;
+    background: rgba(255, 255, 255, 0.18);
 }
 
 .progress-bar-container {
@@ -828,26 +843,9 @@
     border-radius: 0;
 }
 
+/* FIX: overlay nom vidéo masqué — l'utilisateur ne veut plus voir le titre */
 .feed-info-overlay {
-    position: absolute;
-    bottom: 80px;
-    /* Above bottom nav on mobile if exists */
-    left: 1rem;
-    right: 1rem;
-    padding: 1rem;
-    background: linear-gradient(to top, rgba(0, 0, 0, 0.8), transparent);
-    color: white;
-    pointer-events: none;
-    /* Let clicks pass through */
-    max-width: 600px;
-    margin: 0 auto;
-    z-index: 10;
-}
-
-.feed-info-overlay h3 {
-    margin-bottom: 0.5rem;
-    font-size: 1.1rem;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+    display: none !important;
 }
 
 .feed-actions {
@@ -3323,7 +3321,9 @@
 }
 
 @keyframes feSpinAnim {
-    100% { transform: rotate(360deg); }
+    100% {
+        transform: rotate(360deg);
+    }
 }
 
 /* Toolbar */
@@ -3346,7 +3346,9 @@
     scrollbar-width: none;
 }
 
-.fe-tabs::-webkit-scrollbar { display: none; }
+.fe-tabs::-webkit-scrollbar {
+    display: none;
+}
 
 .fe-tab {
     background: #2a2a2a;
