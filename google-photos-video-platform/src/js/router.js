@@ -1,5 +1,4 @@
-// Simple Hash Router
-
+// Simple Hash Router — expanded with history, stats routes
 const routes = {
     '/': 'home',
     '/video': 'video',
@@ -8,7 +7,9 @@ const routes = {
     '/gallery': 'gallery',
     '/profile': 'profile',
     '/search': 'search',
-    '/login': 'login'
+    '/login': 'login',
+    '/history': 'history',
+    '/stats': 'stats'
 };
 
 const Router = {
@@ -23,12 +24,8 @@ const Router = {
 
     handleRoute: () => {
         let hash = window.location.hash.slice(1) || '/';
-        // Handle params like /video?id=123
         const [path, query] = hash.split('?');
-
         const routeName = routes[path] || 'home';
-
-        // Dispatch event for UI to update
         window.dispatchEvent(new CustomEvent('routeChange', {
             detail: {
                 route: routeName,

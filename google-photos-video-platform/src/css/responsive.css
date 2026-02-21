@@ -29,6 +29,13 @@
         flex-direction: row;
         width: 100%;
         justify-content: space-around;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+    }
+
+    .sidebar-nav::-webkit-scrollbar {
+        display: none;
     }
 
     .sidebar-link {
@@ -36,10 +43,15 @@
         gap: 0.2rem;
         padding: 0.5rem;
         font-size: 0.75rem;
+        flex-shrink: 0;
     }
 
     .nav-label {
-        font-size: 0.65rem;
+        font-size: 0.6rem;
+        max-width: 48px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
 
     .main-container {
@@ -60,7 +72,7 @@
     }
 
     .content {
-        padding: 1rem;
+        padding: 0.75rem;
     }
 
     .section-header h2 {
@@ -100,6 +112,22 @@
         display: none;
     }
 
+    /* New player controls: hide cinema & zoom on mobile */
+    .cinema-btn {
+        display: none;
+    }
+
+    .zoom-btn {
+        display: none;
+    }
+
+    /* Filter and download still useful — keep but make touch-friendly */
+    .ctrl-btn {
+        min-width: 40px;
+        min-height: 40px;
+        font-size: 1.1rem !important;
+    }
+
     /* Feed overlay: position above the bottom nav bar */
     .feed-info-overlay {
         bottom: 130px;
@@ -130,11 +158,140 @@
         height: calc(100dvh - 60px);
         height: calc(100vh - 60px);
     }
+
+    /* ── Search Bar — collapse on mobile ── */
+    .search-bar-wrapper {
+        padding: 0.35rem 0.75rem;
+    }
+
+    .search-kbd {
+        display: none;
+    }
+
+    /* ── Navbar action buttons — smaller on mobile ── */
+    .nav-action-btn {
+        width: 36px;
+        height: 36px;
+        font-size: 1rem;
+    }
+
+    /* Hide shortcuts button on mobile (not useful without physical keyboard) */
+    #shortcuts-btn {
+        display: none;
+    }
+
+    /* ── #41 Notification Panel — full width on mobile ── */
+    .notif-panel {
+        position: fixed;
+        top: var(--header-height);
+        left: 0;
+        right: 0;
+        width: 100%;
+        max-height: 60vh;
+        border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+    }
+
+    /* ── #32 Scroll-to-Top — avoid bottom nav ── */
+    .scroll-top-btn {
+        bottom: 80px;
+        left: 12px;
+        width: 40px;
+        height: 40px;
+    }
+
+    /* ── #36 Drag & Drop — adapt for mobile ── */
+    .drag-drop-inner {
+        padding: 40px 30px;
+        font-size: 1rem;
+    }
+
+    .drag-drop-inner span {
+        font-size: 2.2rem;
+    }
+
+    /* ── #37 Lightbox — full screen on mobile ── */
+    .lightbox-nav {
+        width: 40px;
+        height: 40px;
+        font-size: 1.2rem;
+    }
+
+    .lightbox-prev {
+        left: 8px;
+    }
+
+    .lightbox-next {
+        right: 8px;
+    }
+
+    .lightbox-close {
+        top: 10px;
+        right: 10px;
+        width: 38px;
+        height: 38px;
+    }
+
+    /* ── #40 Stats Grid — 2 columns on tablet, 1 on very small ── */
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.75rem;
+    }
+
+    .stats-big-value {
+        font-size: 1.8rem;
+    }
+
+    .stats-big-card {
+        padding: 1rem;
+    }
+
+    /* ── #13 Video Notes textarea — full width ── */
+    .video-notes-section {
+        padding: 1rem;
+    }
+
+    .video-notes-textarea {
+        min-height: 60px;
+        font-size: 1rem;
+        /* 16px prevents iOS zoom on focus */
+    }
+
+    /* ── #38 Share modal — stack buttons ── */
+    .share-menu {
+        justify-content: center;
+    }
+
+    .share-btn {
+        min-width: 70px;
+        padding: 10px 12px;
+        font-size: 0.8rem;
+    }
+
+    /* ── #1 Double-tap heart — slightly smaller ── */
+    .double-tap-heart {
+        font-size: 4.5rem;
+    }
+
+    /* ── Hypno toggle button — shift above bottom nav ── */
+    .hypno-toggle-btn {
+        bottom: 80px;
+    }
+
+    /* ── Skeleton cards — single column ── */
+    .skeleton-grid {
+        grid-template-columns: 1fr;
+    }
 }
 
 @media (max-width: 480px) {
     .header {
-        padding: 0 0.75rem;
+        padding: 0 0.5rem;
+        gap: 0.5rem;
+    }
+
+    /* Hide search bar text on small phones, keep icon only */
+    .search-bar-wrapper {
+        max-width: 140px;
     }
 
     .profile-header {
@@ -147,10 +304,55 @@
         align-items: flex-start;
     }
 
+    /* Stats grid: single column on very small screens */
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
 
+    /* Navbar avatar smaller */
+    .nav-avatar,
+    .nav-avatar-placeholder {
+        width: 30px;
+        height: 30px;
+        font-size: 0.8rem;
+    }
+
+    /* Extra small action buttons */
+    .nav-action-btn {
+        width: 32px;
+        height: 32px;
+        font-size: 0.9rem;
+    }
+
+    /* Loop button hide on tiny screens to save space */
+    .loop-btn {
+        display: none;
+    }
 }
 
 /* Utilities */
 .hidden {
     display: none !important;
+}
+
+/* Touch-friendliness: ensure minimum tap targets */
+@media (pointer: coarse) {
+
+    .btn-icon,
+    .ctrl-btn,
+    .feed-actions .btn-icon {
+        min-width: 44px;
+        min-height: 44px;
+    }
+
+    /* Enlarge progress bar hit area for touch */
+    .progress-bar-container {
+        padding: 8px 0;
+        cursor: pointer;
+    }
+
+    /* Make sidebar links tappable */
+    .sidebar-link {
+        min-height: 44px;
+    }
 }

@@ -1533,3 +1533,749 @@
     transform: scale(1.2) translateX(5px);
     transition: opacity 1s ease;
 }
+
+/* ═══════════════════════════════════════════════════════════
+   NEW FEATURE STYLES (Round 1-4)
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── #30 Active Sidebar Link ── */
+.sidebar-link-active {
+    background: linear-gradient(135deg, rgba(234, 67, 53, 0.15), rgba(66, 133, 244, 0.15));
+    color: var(--primary-color);
+    font-weight: 600;
+    position: relative;
+}
+
+.sidebar-link-active::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 15%;
+    height: 70%;
+    width: 3px;
+    background: var(--primary-color);
+    border-radius: 0 3px 3px 0;
+}
+
+@media (max-width: 768px) {
+    .sidebar-link-active::before {
+        top: auto;
+        bottom: 0;
+        left: 20%;
+        width: 60%;
+        height: 3px;
+        border-radius: 3px 3px 0 0;
+    }
+}
+
+/* ── #31 Skeleton Loaders ── */
+.skeleton-grid {
+    gap: 1.5rem;
+}
+
+.skeleton-card {
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    background: var(--surface-color);
+}
+
+.skeleton-thumb {
+    width: 100%;
+    aspect-ratio: 16/9;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+
+.skeleton-body {
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.skeleton-line {
+    height: 14px;
+    border-radius: 6px;
+}
+
+.skeleton-line.short {
+    width: 50%;
+}
+
+.skeleton-shimmer {
+    background: linear-gradient(90deg,
+            var(--surface-color) 25%,
+            var(--surface-hover) 50%,
+            var(--surface-color) 75%);
+    background-size: 400% 100%;
+    animation: shimmerAnim 1.5s ease-in-out infinite;
+}
+
+@keyframes shimmerAnim {
+    0% {
+        background-position: 200% 0;
+    }
+
+    100% {
+        background-position: -200% 0;
+    }
+}
+
+/* ── Navbar improvements ── */
+.search-bar-wrapper {
+    display: flex;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 99px;
+    padding: 0.45rem 1rem;
+    gap: 0.5rem;
+    transition: border-color 0.2s, background 0.2s;
+}
+
+.search-bar-wrapper:focus-within {
+    border-color: var(--primary-color);
+    background: rgba(255, 255, 255, 0.12);
+}
+
+.search-icon {
+    font-size: 0.9rem;
+    opacity: 0.6;
+}
+
+.search-input {
+    background: transparent;
+    border: none;
+    color: var(--text-color);
+    width: 100%;
+    outline: none;
+    font-size: 0.95rem;
+}
+
+.search-kbd {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    font-family: monospace;
+}
+
+.nav-action-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.08);
+    border: none;
+    color: var(--text-color);
+    font-size: 1.15rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s, transform 0.1s;
+}
+
+.nav-action-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+    transform: scale(1.1);
+}
+
+/* #33 Navbar Avatar */
+.nav-avatar-link {
+    display: flex;
+    align-items: center;
+}
+
+.nav-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 2px solid var(--primary-color);
+    object-fit: cover;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.nav-avatar:hover {
+    transform: scale(1.1);
+    box-shadow: 0 0 12px rgba(234, 67, 53, 0.4);
+}
+
+.nav-avatar-placeholder {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.9rem;
+}
+
+/* #41 Notification Panel */
+.notif-badge {
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    background: var(--primary-color);
+    color: white;
+    font-size: 0.65rem;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+}
+
+.notif-panel {
+    position: absolute;
+    top: 50px;
+    right: 0;
+    width: 320px;
+    max-height: 400px;
+    background: var(--surface-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+    z-index: 3000;
+    overflow: hidden;
+    animation: fadeIn 0.2s;
+}
+
+.notif-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.notif-list {
+    max-height: 350px;
+    overflow-y: auto;
+}
+
+.notif-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    transition: background 0.15s;
+}
+
+.notif-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.notif-icon {
+    font-size: 1.2rem;
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+/* #35 Keyboard Shortcuts Grid */
+.shortcut-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.shortcut-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    font-size: 0.9rem;
+}
+
+.shortcut-key {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 36px;
+    padding: 4px 10px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    font-family: monospace;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-color);
+}
+
+/* ── #32 Scroll-to-Top FAB ── */
+.scroll-top-btn {
+    position: fixed;
+    bottom: 80px;
+    left: 20px;
+    z-index: 900;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(255, 255, 255, 0.12);
+    backdrop-filter: blur(10px);
+    color: white;
+    font-size: 1.2rem;
+    cursor: pointer;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+    transition: transform 0.2s, opacity 0.3s;
+}
+
+.scroll-top-btn.visible {
+    display: flex;
+    animation: fadeIn 0.3s;
+}
+
+.scroll-top-btn:hover {
+    transform: scale(1.15);
+    background: rgba(255, 255, 255, 0.2);
+}
+
+/* ── #36 Drag & Drop Upload Overlay ── */
+.drag-drop-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(66, 133, 244, 0.15);
+    backdrop-filter: blur(6px);
+    z-index: 5000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+.drag-drop-overlay.active {
+    opacity: 1;
+}
+
+.drag-drop-inner {
+    border: 3px dashed var(--accent-color);
+    border-radius: 20px;
+    padding: 60px 80px;
+    text-align: center;
+    color: white;
+    font-size: 1.3rem;
+    font-weight: 600;
+    background: rgba(0, 0, 0, 0.4);
+}
+
+.drag-drop-inner span {
+    font-size: 3rem;
+    display: block;
+    margin-bottom: 12px;
+}
+
+/* ── #37 Image Lightbox ── */
+.lightbox-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.95);
+    z-index: 6000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: zoom-out;
+    animation: fadeIn 0.25s;
+}
+
+.lightbox-overlay img {
+    max-width: 95vw;
+    max-height: 92vh;
+    object-fit: contain;
+    border-radius: 4px;
+    box-shadow: 0 0 60px rgba(0, 0, 0, 0.5);
+    transition: transform 0.2s;
+}
+
+.lightbox-nav {
+    position: fixed;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 6001;
+    width: 50px;
+    height: 50px;
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    border-radius: 50%;
+    color: white;
+    font-size: 1.5rem;
+    cursor: pointer;
+    backdrop-filter: blur(5px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+}
+
+.lightbox-nav:hover {
+    background: rgba(255, 255, 255, 0.25);
+}
+
+.lightbox-prev {
+    left: 20px;
+}
+
+.lightbox-next {
+    right: 20px;
+}
+
+.lightbox-close {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 6001;
+    width: 44px;
+    height: 44px;
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    border-radius: 50%;
+    color: white;
+    font-size: 1.5rem;
+    cursor: pointer;
+    backdrop-filter: blur(5px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.lightbox-counter {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 6001;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 0.9rem;
+}
+
+/* ── #1 Double-Tap Like Heart ── */
+.double-tap-heart {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0);
+    font-size: 6rem;
+    z-index: 100;
+    pointer-events: none;
+    animation: heartBurst 0.8s ease-out forwards;
+    filter: drop-shadow(0 4px 20px rgba(239, 68, 68, 0.5));
+}
+
+@keyframes heartBurst {
+    0% {
+        transform: translate(-50%, -50%) scale(0);
+        opacity: 1;
+    }
+
+    50% {
+        transform: translate(-50%, -50%) scale(1.3);
+        opacity: 1;
+    }
+
+    100% {
+        transform: translate(-50%, -50%) scale(1);
+        opacity: 0;
+    }
+}
+
+/* ── #10 Ambient Background Glow ── */
+.ambient-glow {
+    position: absolute;
+    inset: -40px;
+    z-index: -1;
+    filter: blur(80px) saturate(2);
+    opacity: 0.35;
+    pointer-events: none;
+    transition: background 1s ease;
+}
+
+/* ── #15 Quality Badge ── */
+.quality-badge {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    background: rgba(0, 0, 0, 0.75);
+    color: #4ade80;
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 4px;
+    letter-spacing: 0.5px;
+    z-index: 5;
+}
+
+/* ── Player control buttons styling ── */
+.ctrl-btn {
+    opacity: 0.7;
+    transition: opacity 0.2s;
+    font-size: 1rem !important;
+}
+
+.ctrl-btn:hover {
+    opacity: 1;
+}
+
+/* ── #13 Video Notes ── */
+.video-notes-section {
+    margin-top: 1.5rem;
+    background: var(--surface-color);
+    border-radius: var(--radius-lg);
+    padding: 1.25rem;
+    border: 1px solid var(--border-color);
+}
+
+.video-notes-section h3 {
+    font-size: 0.95rem;
+    margin-bottom: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.video-notes-textarea {
+    width: 100%;
+    min-height: 80px;
+    background: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    color: var(--text-color);
+    padding: 10px;
+    font-family: inherit;
+    font-size: 0.9rem;
+    resize: vertical;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.video-notes-textarea:focus {
+    border-color: var(--accent-color);
+}
+
+/* ── #40 Stats Dashboard ── */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1.25rem;
+    margin-bottom: 2rem;
+}
+
+.stats-big-card {
+    background: linear-gradient(135deg, var(--surface-color), rgba(66, 133, 244, 0.08));
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+    text-align: center;
+    transition: transform 0.2s;
+}
+
+.stats-big-card:hover {
+    transform: translateY(-3px);
+}
+
+.stats-big-value {
+    font-size: 2.5rem;
+    font-weight: 800;
+    background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.stats-big-label {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    margin-top: 4px;
+}
+
+.stats-chart-container {
+    background: var(--surface-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.stats-bar-chart {
+    display: flex;
+    align-items: flex-end;
+    gap: 6px;
+    height: 120px;
+    padding-top: 10px;
+}
+
+.stats-bar {
+    flex: 1;
+    background: linear-gradient(to top, var(--primary-color), var(--accent-color));
+    border-radius: 4px 4px 0 0;
+    min-height: 4px;
+    transition: height 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+    position: relative;
+}
+
+.stats-bar:hover {
+    opacity: 0.8;
+}
+
+.stats-bar-label {
+    text-align: center;
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    margin-top: 4px;
+}
+
+/* ── #42 Theme Customizer ── */
+.theme-customizer {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 10px;
+}
+
+.color-swatch {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 3px solid transparent;
+    cursor: pointer;
+    transition: transform 0.2s, border-color 0.2s;
+}
+
+.color-swatch:hover {
+    transform: scale(1.15);
+}
+
+.color-swatch.active {
+    border-color: white;
+    box-shadow: 0 0 12px currentColor;
+}
+
+/* ── #18 Breathing Guide ── */
+.breathing-guide {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 10000;
+    pointer-events: none;
+}
+
+.breathing-circle {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    border: 3px solid rgba(100, 200, 255, 0.6);
+    background: rgba(100, 200, 255, 0.08);
+    animation: breatheCircle 12s ease-in-out infinite;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    color: rgba(255, 255, 255, 0.7);
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+
+@keyframes breatheCircle {
+
+    0%,
+    100% {
+        transform: scale(0.6);
+    }
+
+    25% {
+        transform: scale(1.2);
+    }
+
+    50% {
+        transform: scale(1.2);
+    }
+
+    75% {
+        transform: scale(0.6);
+    }
+}
+
+/* ── #22 Pulse Border ── */
+.pulse-border {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 9998;
+    border: 4px solid transparent;
+    animation: pulseBorderAnim 2s ease-in-out infinite;
+}
+
+@keyframes pulseBorderAnim {
+
+    0%,
+    100% {
+        border-color: rgba(139, 92, 246, 0.0);
+    }
+
+    50% {
+        border-color: rgba(139, 92, 246, 0.6);
+    }
+}
+
+/* ── #20 Matrix Rain Canvas ── */
+.matrix-canvas {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 9997;
+    opacity: 0.3;
+}
+
+/* ── #21 Eye Tracker ── */
+.eye-tracker-dot {
+    position: fixed;
+    width: 20px;
+    height: 20px;
+    background: radial-gradient(circle, #fff, rgba(139, 92, 246, 0.8));
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 10001;
+    box-shadow: 0 0 20px rgba(139, 92, 246, 0.6);
+    transition: top 0.05s linear, left 0.05s linear;
+}
+
+/* ── #38 Share Sheet ── */
+.share-menu {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding: 10px 0;
+}
+
+.share-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 12px 16px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    color: var(--text-color);
+    cursor: pointer;
+    transition: background 0.2s;
+    font-size: 0.85rem;
+    min-width: 80px;
+}
+
+.share-btn:hover {
+    background: rgba(255, 255, 255, 0.12);
+}
+
+.share-btn span:first-child {
+    font-size: 1.5rem;
+}

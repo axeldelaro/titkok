@@ -9,7 +9,7 @@ import Sidebar from '../components/sidebar.js';
 import Player from './player.js';
 import Likes from './likes.js';
 import Gallery from './gallery.js';
-// PendingUploads removed — simple upload flow
+import History from './history.js';
 import { Toast } from '../components/toast.js';
 import Modal from '../components/modal.js';
 import HypnoPopups, { getConfig, updateConfig } from './hypno.js';
@@ -162,6 +162,39 @@ const UI = {
         // Initialize features
         Likes.init();
         Gallery.init();
+        History.init();
+
+        // #32 Scroll-to-Top FAB
+        const scrollBtn = document.createElement('button');
+        scrollBtn.className = 'scroll-top-btn';
+        scrollBtn.innerHTML = '⬆';
+        scrollBtn.onclick = () => content.scrollTo({ top: 0, behavior: 'smooth' });
+        document.body.appendChild(scrollBtn);
+        content.addEventListener('scroll', () => {
+            scrollBtn.classList.toggle('visible', content.scrollTop > 600);
+        });
+
+        // #36 Drag & Drop Upload Overlay
+        const dragOverlay = document.createElement('div');
+        dragOverlay.className = 'drag-drop-overlay';
+        dragOverlay.innerHTML = '<div class="drag-drop-inner"><span>📁</span>Drop files to upload</div>';
+        document.body.appendChild(dragOverlay);
+        let dragCounter = 0;
+        document.addEventListener('dragenter', (e) => { e.preventDefault(); dragCounter++; dragOverlay.classList.add('active'); });
+        document.addEventListener('dragleave', (e) => { e.preventDefault(); dragCounter--; if (dragCounter <= 0) { dragCounter = 0; dragOverlay.classList.remove('active'); } });
+        document.addEventListener('dragover', (e) => e.preventDefault());
+        document.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dragCounter = 0;
+            dragOverlay.classList.remove('active');
+            const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('video/'));
+            if (files.length > 0) {
+                const dt = new DataTransfer();
+                files.forEach(f => dt.items.add(f));
+                uploadInput.files = dt.files;
+                uploadInput.dispatchEvent(new Event('change'));
+            }
+        });
     },
 
     handleRoute: async (route) => {
@@ -209,6 +242,12 @@ const UI = {
                 const query = route.params.get('q');
                 if (query) UI.renderSearch(content, query);
                 else Router.navigate('/');
+                break;
+            case 'history':
+                UI.renderHistory(content);
+                break;
+            case 'stats':
+                UI.renderStats(content);
                 break;
             default:
                 content.innerHTML = `
@@ -381,6 +420,37 @@ const UI = {
                 card.appendChild(playerContainer);
                 card.appendChild(infoOverlay);
                 card.appendChild(actions);
+
+                // #1 Double-Tap Like
+                let lastTap = 0;
+                playerContainer.addEventListener('pointerdown', (e) => {
+                    const now = Date.now();
+                    if (now - lastTap < 300) {
+                        // Double tap!
+                        if (!Likes.isLiked(video.id)) Likes.toggleLike(video);
+                        actions.querySelector('.like-btn').textContent = '❤️';
+                        const heart = document.createElement('div');
+                        heart.className = 'double-tap-heart';
+                        heart.textContent = '❤️';
+                        playerContainer.style.position = 'relative';
+                        playerContainer.appendChild(heart);
+                        setTimeout(() => heart.remove(), 900);
+                    }
+                    lastTap = now;
+                });
+
+                // #3 Auto-Play Next (listen for videoEnded)
+                playerContainer.addEventListener('videoEnded', () => {
+                    const allCards = [...feed.querySelectorAll('.video-card-feed')];
+                    const idx = allCards.indexOf(card);
+                    if (idx >= 0 && idx < allCards.length - 1) {
+                        allCards[idx + 1].scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                });
+
+                // #14 Add to History
+                History.addToHistory(video);
+
                 feed.appendChild(card);
                 observer.observe(card);
             };
@@ -464,14 +534,37 @@ const UI = {
             UI.showAddToPlaylistModal(video);
         };
 
-        // Share / Copy Link
+        // #38 Share Modal (rich)
         const shareBtn = info.querySelector('#share-btn');
         shareBtn.onclick = () => {
             const url = `${window.location.origin}/#/video?id=${video.id}`;
-            navigator.clipboard.writeText(url).then(() => {
-                Toast.show('Link copied to clipboard!');
-            }).catch(() => {
-                Toast.show('Failed to copy link', 'error');
+            const shareContent = `
+                <div class="share-menu">
+                    <button class="share-btn" data-action="copy"><span>📋</span>Copy Link</button>
+                    <button class="share-btn" data-action="twitter"><span>🐦</span>Twitter</button>
+                    <button class="share-btn" data-action="whatsapp"><span>💬</span>WhatsApp</button>
+                    <button class="share-btn" data-action="email"><span>📧</span>Email</button>
+                </div>
+                <div style="margin-top:10px;background:var(--bg-color);padding:8px 12px;border-radius:var(--radius-md);font-size:0.8rem;word-break:break-all;color:var(--text-secondary);">${url}</div>
+            `;
+            const shareModal = Modal('Share Video', shareContent);
+            document.body.appendChild(shareModal);
+            shareModal.querySelectorAll('.share-btn').forEach(btn => {
+                btn.onclick = () => {
+                    const action = btn.dataset.action;
+                    if (action === 'copy') {
+                        navigator.clipboard.writeText(url);
+                        Toast.show('Link copied!', 'success');
+                    } else if (action === 'twitter') {
+                        window.open(`https://twitter.com/intent/tweet?url=${encodeURIComponent(url)}&text=${encodeURIComponent(video.filename)}`);
+                    } else if (action === 'whatsapp') {
+                        window.open(`https://wa.me/?text=${encodeURIComponent(video.filename + ' ' + url)}`);
+                    } else if (action === 'email') {
+                        window.open(`mailto:?subject=${encodeURIComponent(video.filename)}&body=${encodeURIComponent(url)}`);
+                    }
+                    shareModal.classList.remove('open');
+                    setTimeout(() => shareModal.remove(), 300);
+                };
             });
         };
 
@@ -486,7 +579,30 @@ const UI = {
         };
 
         wrapper.appendChild(info);
+
+        // #13 Video Notes
+        const notesKey = `video_notes_${video.id}`;
+        const notesSection = document.createElement('div');
+        notesSection.className = 'video-notes-section';
+        notesSection.innerHTML = `
+            <h3>📝 Notes</h3>
+            <textarea class="video-notes-textarea" placeholder="Add personal notes about this video...">${localStorage.getItem(notesKey) || ''}</textarea>
+        `;
+        const textarea = notesSection.querySelector('textarea');
+        let noteSaveTimer;
+        textarea.oninput = () => {
+            clearTimeout(noteSaveTimer);
+            noteSaveTimer = setTimeout(() => {
+                localStorage.setItem(notesKey, textarea.value);
+                Toast.show('Note saved', 'success', 1500);
+            }, 800);
+        };
+        wrapper.appendChild(notesSection);
+
         container.appendChild(wrapper);
+
+        // #14 Add to History on video page view
+        History.addToHistory(video);
     },
 
     renderLikes: (container) => {
@@ -1232,6 +1348,122 @@ const UI = {
             container.innerHTML += `<p class="text-secondary">Error searching: ${error.message}</p>`;
             Toast.show('Search failed', 'error');
         }
+    },
+
+    // ── #14 Watch History Page ──
+    renderHistory: (container) => {
+        const history = History.getHistory();
+        container.innerHTML = `
+            <div class="section-header">
+                <h2>🕐 Watch History</h2>
+                <div style="display:flex;gap:10px;align-items:center;">
+                    <span class="text-secondary">${history.length} video${history.length !== 1 ? 's' : ''}</span>
+                    <button id="clear-history" class="btn-secondary" style="font-size:0.8rem;">Clear All</button>
+                </div>
+            </div>
+        `;
+        container.querySelector('#clear-history').onclick = () => {
+            History.clearHistory();
+            UI.renderHistory(container);
+            Toast.show('History cleared', 'success');
+        };
+
+        if (history.length === 0) {
+            container.innerHTML += `
+                <div class="empty-state">
+                    <span class="empty-state-icon">🕐</span>
+                    <h2>No Watch History</h2>
+                    <p class="text-secondary">Videos you watch will appear here.</p>
+                </div>`;
+            return;
+        }
+
+        const grid = document.createElement('div');
+        grid.className = 'video-grid';
+        history.forEach(video => {
+            const card = VideoCard(video);
+            // Show when watched
+            const badge = document.createElement('div');
+            badge.className = 'quality-badge';
+            badge.style.cssText = 'background:rgba(0,0,0,0.7);color:var(--text-secondary);';
+            badge.textContent = UI.timeAgo(video.watchedAt);
+            card.style.position = 'relative';
+            card.appendChild(badge);
+            grid.appendChild(card);
+        });
+        container.appendChild(grid);
+    },
+
+    // ── #40 Stats Dashboard ──
+    renderStats: (container) => {
+        const history = History.getHistory();
+        const likes = Likes.getLikes();
+        const videos = Store.get('videos') || [];
+
+        // Calculate stats
+        const totalWatched = history.length;
+        const totalLiked = likes.length;
+        const totalVideos = videos.length;
+        const totalNotes = Object.keys(localStorage).filter(k => k.startsWith('video_notes_')).length;
+
+        // Watch activity by day of week
+        const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        const dayCounts = [0, 0, 0, 0, 0, 0, 0];
+        history.forEach(h => {
+            if (h.watchedAt) dayCounts[new Date(h.watchedAt).getDay()]++;
+        });
+        const maxDay = Math.max(...dayCounts, 1);
+
+        container.innerHTML = `
+            <div class="section-header">
+                <h2>📊 Your Statistics</h2>
+                <span class="text-secondary">Viewing activity</span>
+            </div>
+
+            <div class="stats-grid">
+                <div class="stats-big-card">
+                    <div class="stats-big-value">${totalVideos}</div>
+                    <div class="stats-big-label">Videos in Library</div>
+                </div>
+                <div class="stats-big-card">
+                    <div class="stats-big-value">${totalWatched}</div>
+                    <div class="stats-big-label">Videos Watched</div>
+                </div>
+                <div class="stats-big-card">
+                    <div class="stats-big-value">${totalLiked}</div>
+                    <div class="stats-big-label">Liked Videos</div>
+                </div>
+                <div class="stats-big-card">
+                    <div class="stats-big-value">${totalNotes}</div>
+                    <div class="stats-big-label">Video Notes</div>
+                </div>
+            </div>
+
+            <div class="stats-chart-container">
+                <h3 style="margin-bottom:1rem;font-size:0.95rem;">📅 Watch Activity by Day</h3>
+                <div class="stats-bar-chart">
+                    ${dayCounts.map((count, i) => `
+                        <div style="flex:1;text-align:center;">
+                            <div class="stats-bar" style="height:${Math.max(4, (count / maxDay) * 100)}%;" title="${count} videos"></div>
+                            <div class="stats-bar-label">${dayNames[i]}</div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+
+            <div class="stats-chart-container">
+                <h3 style="margin-bottom:1rem;font-size:0.95rem;">🎯 Recent Activity</h3>
+                <div style="max-height:250px;overflow-y:auto;">
+                ${history.slice(0, 15).map(h => `
+                    <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border-color);font-size:0.9rem;">
+                        <a href="#/video?id=${h.id}" style="color:var(--text-color);max-width:70%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${h.filename}</a>
+                        <span style="color:var(--text-secondary);font-size:0.8rem;">${UI.timeAgo(h.watchedAt)}</span>
+                    </div>
+                `).join('')}
+                ${history.length === 0 ? '<div style="padding:20px;text-align:center;color:var(--text-secondary);">No activity yet</div>' : ''}
+                </div>
+            </div>
+        `;
     },
 
     // ---- Helpers ----
