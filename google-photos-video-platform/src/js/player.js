@@ -13,8 +13,7 @@ export default class Player {
         this.mediaItemId = options.mediaItemId || null;
         this._retryCount = 0;
         this._maxRetries = 3;
-        // Feature: Video Filters (#7)
-        this._filterIndex = 0;
+        // Feature: Video Filters (#7) — GLOBAL: shared across all players
         this._filters = [
             { name: 'None', css: 'none' },
             { name: 'Grayscale', css: 'grayscale(1)' },
@@ -33,14 +32,17 @@ export default class Player {
             { name: 'Delay 4', css: 'none', delay: 4 },
             { name: 'Delay 5', css: 'none', delay: 5 }
         ];
+        // Read global filter from localStorage
+        this._filterIndex = parseInt(localStorage.getItem('playerFilterIndex') || '0', 10);
+        if (this._filterIndex >= this._filters.length) this._filterIndex = 0;
         // Feature: Cinema Mode (#11)
         this._cinemaMode = false;
         // Feature: Zoom & Pan (#6)
         this._zoomLevel = 1;
         this._panX = 0;
         this._panY = 0;
-        // Delay echo clones
-        this._delayClones = [];
+        // Delay canvas layers
+        this._delayLayers = [];
 
         this.init();
     }
@@ -140,13 +142,14 @@ export default class Player {
                 try {
                     this.video.muted = false;
                     this.video.volume = 0.5;
-                    // Update UI
                     const muteBtn = this.controls.querySelector('.mute-btn');
                     const volumeSlider = this.controls.querySelector('.volume-slider');
-                    if (muteBtn) muteBtn.textContent = '🔉';
+                    if (muteBtn) muteBtn.textContent = '\ud83d\udd09';
                     if (volumeSlider) volumeSlider.value = 0.5;
-                } catch (e) { /* browser blocked unmute — user will tap mute btn */ }
+                } catch (e) { /* browser blocked unmute */ }
             }
+            // Apply global filter on load
+            this._applyCurrentFilter();
         };
         this.video.addEventListener('canplay', onReady);
         this.video.addEventListener('playing', onReady);
@@ -393,18 +396,11 @@ export default class Player {
             loopBtn.style.opacity = this.video.loop ? '1' : '0.5';
         };
 
-        // Feature #7: Video Filters + Delay Echo
+        // Feature #7: Video Filters + Delay Echo (GLOBAL)
         filterBtn.onclick = () => {
             this._filterIndex = (this._filterIndex + 1) % this._filters.length;
-            const f = this._filters[this._filterIndex];
-            this.video.style.filter = f.css;
-            filterBtn.title = `Filter: ${f.name}`;
-
-            // Handle delay echo clones
-            this._clearDelay();
-            if (f.delay) {
-                this._applyDelay(f.delay);
-            }
+            localStorage.setItem('playerFilterIndex', this._filterIndex);
+            this._applyCurrentFilter();
         };
 
         // Feature #11: Cinema Mode
@@ -588,67 +584,63 @@ export default class Player {
         this.video.style.transform = `scale(${this._zoomLevel}) translate(${this._panX / this._zoomLevel}px, ${this._panY / this._zoomLevel}px)`;
     }
 
-    // ── Delay Echo: clone video with time offset ──
+    // ── Apply current filter (CSS + delay) ──
+    _applyCurrentFilter() {
+        const f = this._filters[this._filterIndex];
+        this.video.style.filter = f.css;
+        const filterBtn = this.controls?.querySelector('.filter-btn');
+        if (filterBtn) filterBtn.title = `Filter: ${f.name}`;
+
+        // Handle delay canvases
+        this._clearDelay();
+        if (f.delay) {
+            this._applyDelay(f.delay);
+        }
+    }
+
+    // ── Delay Echo: canvas-based frame capture ──
     _applyDelay(count) {
         this._clearDelay();
-        const offsets = [0.15, 0.3, 0.5, 0.75, 1.0]; // seconds behind
-        const opacities = [0.6, 0.45, 0.3, 0.2, 0.15];
-        const hueShifts = [0, 15, 30, 50, 70]; // increasing hue shift
+        // Each layer captures video frames at a different interval
+        // Slower update = more "delayed" appearance
+        const intervals = [100, 200, 350, 500, 700]; // ms between frame captures
+        const opacities = [0.5, 0.4, 0.3, 0.2, 0.15];
 
         for (let i = 0; i < count; i++) {
-            const clone = this.video.cloneNode(false);
-            clone.removeAttribute('id');
-            clone.muted = true;
-            clone.loop = this.video.loop;
-            clone.playsInline = true;
-            clone.controls = false;
-            clone.className = 'delay-clone';
-            clone.style.cssText = `
+            const canvas = document.createElement('canvas');
+            canvas.style.cssText = `
                 position:absolute; top:0; left:0;
                 width:100%; height:100%;
-                object-fit:contain;
                 pointer-events:none;
                 opacity:${opacities[i]};
                 mix-blend-mode:screen;
-                filter:hue-rotate(${hueShifts[i]}deg) blur(${i * 0.5}px);
                 z-index:${i + 1};
             `;
-            clone.src = this.video.src;
-            this.container.insertBefore(clone, this.controls);
+            this.container.insertBefore(canvas, this.controls);
+            const ctx = canvas.getContext('2d');
 
-            // Sync clone with main video but offset in time
-            const offset = offsets[i];
-            let rafId;
-            const sync = () => {
-                if (!clone.parentNode) return;
-                const t = this.video.currentTime - offset;
-                const target = t < 0 ? (this.video.duration + t) : t;
-                // Only seek if drift is > 0.1s to avoid constant seeking
-                if (Math.abs(clone.currentTime - target) > 0.1) {
-                    clone.currentTime = target >= 0 ? target : 0;
+            // Capture frame at staggered interval
+            const intervalId = setInterval(() => {
+                if (!canvas.parentNode || this.video.paused || this.video.readyState < 2) return;
+                const vw = this.video.videoWidth || 640;
+                const vh = this.video.videoHeight || 360;
+                if (canvas.width !== vw || canvas.height !== vh) {
+                    canvas.width = vw;
+                    canvas.height = vh;
                 }
-                // Match play/pause state
-                if (!this.video.paused && clone.paused) {
-                    clone.play().catch(() => { });
-                } else if (this.video.paused && !clone.paused) {
-                    clone.pause();
-                }
-                rafId = requestAnimationFrame(sync);
-            };
-            rafId = requestAnimationFrame(sync);
-            this._delayClones.push({ el: clone, rafId });
+                ctx.drawImage(this.video, 0, 0, vw, vh);
+            }, intervals[i]);
+
+            this._delayLayers.push({ el: canvas, intervalId });
         }
     }
 
     _clearDelay() {
-        this._delayClones.forEach(({ el, rafId }) => {
-            cancelAnimationFrame(rafId);
-            el.pause();
-            el.removeAttribute('src');
-            el.load();
+        this._delayLayers.forEach(({ el, intervalId }) => {
+            clearInterval(intervalId);
             if (el.parentNode) el.remove();
         });
-        this._delayClones = [];
+        this._delayLayers = [];
     }
 
     formatTime(seconds) {
