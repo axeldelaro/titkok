@@ -27,11 +27,11 @@ export default class Player {
             { name: 'Cool', css: 'hue-rotate(180deg) saturate(1.3)' },
             { name: 'Vintage', css: 'sepia(0.6) contrast(1.1) brightness(0.9)' },
             { name: 'Negative', css: 'invert(1) contrast(1.3)' },
-            { name: 'Ghost 1', css: 'brightness(1.3) contrast(0.8) blur(0.5px)' },
-            { name: 'Ghost 2', css: 'brightness(1.5) contrast(0.6) blur(1px) saturate(0.7)' },
-            { name: 'Ghost 3', css: 'brightness(1.8) contrast(0.5) blur(2px) saturate(0.5)' },
-            { name: 'Ghost 4', css: 'brightness(2) contrast(0.4) blur(3px) saturate(0.3) hue-rotate(30deg)' },
-            { name: 'Ghost 5', css: 'brightness(2.5) contrast(0.3) blur(4px) grayscale(0.6)' }
+            { name: 'Delay 1', css: 'brightness(1.1) contrast(0.9) blur(0.3px) saturate(1.2)' },
+            { name: 'Delay 2', css: 'brightness(1.2) contrast(0.75) blur(0.8px) saturate(1.4) hue-rotate(10deg)' },
+            { name: 'Delay 3', css: 'brightness(1.4) contrast(0.6) blur(1.5px) saturate(1.6) hue-rotate(25deg)' },
+            { name: 'Delay 4', css: 'brightness(1.6) contrast(0.5) blur(2.5px) saturate(2) hue-rotate(45deg)' },
+            { name: 'Delay 5', css: 'brightness(1.8) contrast(0.4) blur(4px) saturate(2.5) hue-rotate(60deg)' }
         ];
         // Feature: Cinema Mode (#11)
         this._cinemaMode = false;
@@ -133,6 +133,18 @@ export default class Player {
             }
             // Feature #2: Restore progress
             this._restoreProgress();
+            // Auto-unmute: try to unmute with sound once video is ready
+            if (this.video.muted) {
+                try {
+                    this.video.muted = false;
+                    this.video.volume = 0.5;
+                    // Update UI
+                    const muteBtn = this.controls.querySelector('.mute-btn');
+                    const volumeSlider = this.controls.querySelector('.volume-slider');
+                    if (muteBtn) muteBtn.textContent = '🔉';
+                    if (volumeSlider) volumeSlider.value = 0.5;
+                } catch (e) { /* browser blocked unmute — user will tap mute btn */ }
+            }
         };
         this.video.addEventListener('canplay', onReady);
         this.video.addEventListener('playing', onReady);
