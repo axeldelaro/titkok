@@ -90,6 +90,7 @@ const FaceEditor = {
         };
 
         this._buildUI();
+        document.getElementById('fe-loading').style.display = 'flex';
         await this.init();
 
         // Load image to canvas
@@ -100,8 +101,6 @@ const FaceEditor = {
             this._canvas.height = this._imgEl.height;
             this._ctx.drawImage(this._imgEl, 0, 0);
 
-            document.getElementById('fe-loading').style.display = 'flex';
-
             // Send to MediaPipe
             try {
                 await faceMeshInstance.send({ image: this._imgEl });
@@ -111,6 +110,23 @@ const FaceEditor = {
                 document.getElementById('fe-loading').style.display = 'none';
             }
         };
+        this._imgEl.onerror = () => {
+            console.error("Image load failed, trying without crossOrigin caching...");
+            // Fallback for CORS caching issues: fetch as blob
+            fetch(this._originalImageSrc, { cache: 'reload' })
+                .then(res => res.blob())
+                .then(blob => {
+                    this._imgEl.onerror = null; // prevent infinite loop
+                    this._imgEl.src = URL.createObjectURL(blob);
+                })
+                .catch(err => {
+                    console.error("Blob fetch failed", err);
+                    Toast.show('Error loading image.', 'error');
+                    document.getElementById('fe-loading').style.display = 'none';
+                });
+        };
+        // Use a 1080px version to be faster and potentially bypass exact cache
+        this._originalImageSrc = Gallery.getImageURL(imageObj, 1080);
         this._imgEl.src = this._originalImageSrc;
     },
 
