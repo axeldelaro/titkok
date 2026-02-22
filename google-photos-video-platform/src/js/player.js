@@ -260,8 +260,9 @@ export default class Player {
     // ─────────────────────────────────────────────────────────────────
 
     _trailFadeRate() {
-        // Invert: slider right = longer trail = slower fade
-        return 0.01 + (1 - this._trailStrength) * 0.49; // 0.01 … 0.50
+        // Slider right (1.0) = long trail = slow fade (0.02)
+        // Slider left  (0.0) = short trail = fast fade (0.30)
+        return 0.02 + (1 - this._trailStrength) * 0.28;
     }
 
     _startTrail() {
@@ -289,8 +290,8 @@ export default class Player {
             if (!this._trailRunning) return;
             this._trailRaf = requestAnimationFrame(tick);
 
-            // Skip drawing while paused or not ready, but keep loop alive
-            if (this.video.paused || this.video.readyState < 2) return;
+            // Skip drawing if not ready — still draw while paused
+            if (this.video.readyState < 2) return;
 
             const vw = this.video.videoWidth;
             const vh = this.video.videoHeight;
@@ -304,17 +305,21 @@ export default class Player {
                 ctx.fillRect(0, 0, vw, vh);
             }
 
-            const fadeRate = this._trailFadeRate();
+            const s = this._trailStrength;
+            const fadeRate = 0.02 + (1 - s) * 0.28; // 0.30 (short) → 0.02 (long)
+            // KEY FIX: drawAlpha MUST be < 1.0 for trail to accumulate.
+            // At 1.0 the new frame overwrites everything — no trail possible.
+            const drawAlpha = 1 - s * 0.5;            // 1.00 (none) → 0.50 (max)
 
-            // 1. Fade toward black → dims old positions (creates the trail)
+            // 1. Fade existing content toward black
             ctx.globalAlpha = fadeRate;
             ctx.fillStyle = '#000';
             ctx.fillRect(0, 0, vw, vh);
 
-            // 2. Draw current frame at FULL opacity
-            //    Current positions = crisp. Moved positions = trail.
-            ctx.globalAlpha = 1.0;
+            // 2. Draw new frame at drawAlpha — old positions bleed through
+            ctx.globalAlpha = drawAlpha;
             ctx.drawImage(this.video, 0, 0, vw, vh);
+            ctx.globalAlpha = 1;
         };
 
         this._trailRaf = requestAnimationFrame(tick);
