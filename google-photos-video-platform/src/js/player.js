@@ -6,8 +6,8 @@ export default class Player {
         this.posterUrl = posterUrl;
         this.video = null;
 
-        // 5 delayed clones for a fluid ghost trail
-        this.numClones = 5;
+        // 8 delayed clones for a dense, fluid ghost trail
+        this.numClones = 8;
         this.trailVideos = [];
 
         this.controls = null;
@@ -370,27 +370,42 @@ export default class Player {
         const s = this._trailStrength;
         if (s === 0) return;
 
-        // At low strength, clones are tightly packed (0.04s apart)
-        // At high strength, they space out more (0.08s apart)
-        const gap = 0.04 + (s * 0.04);
+        // Smaller gap since we have 8 clones now. Max gap ~0.04s per clone.
+        const gap = 0.02 + (s * 0.02);
+        const isPaused = this.video.paused;
 
         for (let i = 0; i < this.numClones; i++) {
             const clone = this.trailVideos[i];
             if (clone.style.opacity === '0' || clone.readyState < 2) continue;
 
-            // i=0 is the closest clone (-gap), i=4 is the furthest (-5*gap)
             const targetDelay = gap * (i + 1);
-            const targetTime = Math.max(0, this.video.currentTime - targetDelay);
+            let targetTime = this.video.currentTime - targetDelay;
+            if (targetTime < 0) targetTime = 0; // Don't seek to negative
 
             const drift = Math.abs(clone.currentTime - targetTime);
 
-            // Allow slight drift before hard snapping to prevent constant stuttering
-            if (drift > 0.15) {
+            // Fix for the looping bug: Do not constantly spam `currentTime` on videos.
+            // Seeking forces the browser to drop frames and find keyframes, causing stutter.
+            // We only snap if the drift is huge (> 0.4s) or if paused to align them perfectly.
+            if (drift > 0.4 || (isPaused && drift > 0.05)) {
                 clone.currentTime = targetTime;
+            } else if (!isPaused) {
+                // Soft sync via playback rate (catch up or slow down slightly)
+                // This is much smoother than seeking
+                if (drift > 0.05) {
+                    if (clone.currentTime < targetTime) {
+                        clone.playbackRate = this.video.playbackRate * 1.05; // speed up
+                    } else {
+                        clone.playbackRate = this.video.playbackRate * 0.95; // slow down
+                    }
+                } else {
+                    clone.playbackRate = this.video.playbackRate;
+                }
             }
 
-            if (clone.playbackRate !== this.video.playbackRate) {
-                clone.playbackRate = this.video.playbackRate;
+            // Ensure they are playing if the main video is playing
+            if (!isPaused && clone.paused) {
+                clone.play().catch(() => { });
             }
         }
     }
