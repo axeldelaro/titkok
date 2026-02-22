@@ -31,10 +31,9 @@ export default class Player {
 
         // ── Motion Trail strength ─────────────────────────────────────
         // 0.0 (slider left)  → 0 clones active, purely normal video
-        // 1.0 (slider right) → 5 clones active, spaced out, long heavy trail
-        this._trailStrength = Math.max(0, Math.min(1,
-            parseFloat(localStorage.getItem('trailStrength') ?? '0.5')
-        ));
+        // 1.0 (slider right) → 12 clones active, spaced out, long heavy trail
+        this._trailStrength = 1.0;
+        localStorage.setItem('trailStrength', '1');
 
         // ── Zoom / Cinema ─────────────────────────────────────────────
         this._zoomLevel = 1;
@@ -287,7 +286,7 @@ export default class Player {
         this.trailVideos.forEach(v => v.load());
 
         this.video.play().catch(() => { });
-        // Do not force play clones here; let _syncTrailVideo handle their startup sequentially
+        this.trailVideos.forEach(v => v.play().catch(() => { }));
 
         this._updateTrailVisuals();
 
@@ -363,7 +362,7 @@ export default class Player {
         }
     }
 
-    _syncTrailVideo() {
+    _syncTrailVideo(forceSnap = false) {
         if (this.video.readyState < 2) return;
 
         const s = this._trailStrength;
@@ -379,11 +378,10 @@ export default class Player {
             const targetDelay = gap * (i + 1);
 
             // Startup phase fix:
-            // If the main video hasn't reached the delay time for this clone,
-            // the clone MUST stay frozen at 0.
+            // If the main video hasn't reached the delay time for this clone, hold it at 0.
             if (this.video.currentTime <= targetDelay) {
                 if (!clone.paused) clone.pause();
-                if (clone.currentTime > 0) clone.currentTime = 0;
+                if (clone.currentTime > 0.05) clone.currentTime = 0;
                 continue; // Wait until the main video is far enough ahead
             }
 
@@ -391,10 +389,7 @@ export default class Player {
 
             const drift = Math.abs(clone.currentTime - targetTime);
 
-            // Fix for the looping bug: Do not constantly spam `currentTime` on videos.
-            // Seeking forces the browser to drop frames and find keyframes, causing stutter.
-            // We only snap if the drift is huge (> 0.4s) or if paused to align them perfectly.
-            if (drift > 0.4 || (isPaused && drift > 0.05)) {
+            if (forceSnap || drift > 0.4 || (isPaused && drift > 0.05)) {
                 clone.currentTime = targetTime;
             } else if (!isPaused) {
                 // Soft sync via playback rate (catch up or slow down slightly)
@@ -456,7 +451,7 @@ export default class Player {
         const togglePlay = () => {
             if (this.video.paused) {
                 this.video.play();
-                // trailVideos will play automatically via _syncTrailVideo when their time comes
+                this.trailVideos.forEach(v => v.play().catch(() => { }));
                 playBtn.textContent = '⏸';
                 this.isPlaying = true;
             } else {
@@ -520,7 +515,7 @@ export default class Player {
             localStorage.setItem('trailStrength', this._trailStrength);
             trailLabel.textContent = `${Math.round(this._trailStrength * 100)}%`;
             this._updateTrailVisuals();
-            this._syncTrailVideo();
+            this._syncTrailVideo(true); // Snap instantly when slider moves
         };
 
         // ── Filter ────────────────────────────────────────────────────
