@@ -852,128 +852,180 @@ const UI = {
             const meta = video.mediaMetadata || {};
             let w = parseInt(meta.width) || 0;
             let h = parseInt(meta.height) || 0;
-            if ((!w || !h) && meta.video) {
-                w = parseInt(meta.video.width) || w;
-                h = parseInt(meta.video.height) || h;
-            }
+            if ((!w || !h) && meta.video) { w = parseInt(meta.video.width) || w; h = parseInt(meta.video.height) || h; }
             return h > w && w > 0;
         };
 
-        const observer = new IntersectionObserver((entries) => {
-            entries.forEach(entry => {
-                // Video play/pause
-                const player = entry.target._player;
-                if (player) {
-                    if (entry.isIntersecting) player.activate();
-                    else player.deactivate();
+        // ─── VIRTUAL DOM POOL for Mix ────────────────────────────────
+        // Image cards are always cheap. Only video cards need Player instances.
+        // We keep BUFFER video-players alive on each side of the visible card.
+        const BUFFER = 4;
+        const liveCards = new Map(); // mixIdx → live card element (videos only)
+
+        const buildVideoCard = (video, idx) => {
+            const card = document.createElement('div');
+            card.dataset.mixIdx = idx;
+            const isPortrait = isPortraitVideo(video);
+            card.className = `video-card-feed${isPortrait ? ' portrait' : ''}`;
+
+            const playerContainer = document.createElement('div');
+            playerContainer.className = 'feed-player-container';
+            const player = new Player(playerContainer, video.baseUrl, video.baseUrl, { lazy: true, mediaItemId: video.id });
+            card._player = player;
+
+            if (!isPortrait && player.video) {
+                player.video.addEventListener('loadedmetadata', () => {
+                    if (player.video.videoHeight > player.video.videoWidth) card.classList.add('portrait');
+                });
+            }
+
+            const infoOverlay = document.createElement('div');
+            infoOverlay.className = 'feed-info-overlay';
+            infoOverlay.innerHTML = `<h3>🎬 ${video.filename}</h3>`;
+
+            const actions = document.createElement('div');
+            actions.className = 'feed-actions';
+            actions.innerHTML = `
+                <button class="btn-icon like-btn" title="Like">${Likes.isLiked(video.id) ? '❤️' : '🤍'}</button>
+                <button class="btn-icon share-btn" title="Copy Link">🔗</button>
+            `;
+            actions.querySelector('.like-btn').onclick = (e) => {
+                e.stopPropagation();
+                e.currentTarget.textContent = Likes.toggleLike(video) ? '❤️' : '🤍';
+            };
+            actions.querySelector('.share-btn').onclick = (e) => {
+                e.stopPropagation();
+                if (video._isLocal) { Toast.show('Link available after upload', 'info'); return; }
+                navigator.clipboard.writeText(`${window.location.origin}/#/video?id=${video.id}`);
+                Toast.show('Link copied!');
+            };
+
+            card.appendChild(playerContainer);
+            card.appendChild(infoOverlay);
+            card.appendChild(actions);
+            return card;
+        };
+
+        const buildImageCard = (image, idx) => {
+            const card = document.createElement('div');
+            card.className = 'video-card-feed gallery-card';
+            card.dataset.mixIdx = idx;
+
+            const imgContainer = document.createElement('div');
+            imgContainer.className = 'gallery-img-container';
+
+            const img = document.createElement('img');
+            img.src = Gallery.getImageURL(image);
+            img.alt = image.filename || 'Image';
+            img.draggable = false;
+            img.loading = 'lazy';
+            img.decoding = 'async';
+
+            const meta = image.mediaMetadata || {};
+            const w = parseInt(meta.width) || 0;
+            const h = parseInt(meta.height) || 0;
+            if (h > w * 1.2) { card.classList.add('portrait'); img.classList.add('gallery-img-portrait'); }
+            else { img.classList.add('gallery-img-landscape'); }
+
+            imgContainer.appendChild(img);
+            card.appendChild(imgContainer);
+
+            const info = document.createElement('div');
+            info.className = 'feed-info-overlay';
+            info.innerHTML = `<h3>🖼️ ${image.filename || 'Image'}</h3>`;
+            card.appendChild(info);
+
+            const actions = document.createElement('div');
+            actions.className = 'feed-actions';
+            actions.innerHTML = `<button class="btn-icon edit-btn" title="AI Retouch">🪄</button>`;
+            actions.querySelector('.edit-btn').onclick = (e) => { e.stopPropagation(); FaceEditor.open(image); };
+            card.appendChild(actions);
+
+            return card; // image cards have no _player
+        };
+
+        const makePlaceholder = (idx) => {
+            const ph = document.createElement('div');
+            ph.className = 'video-card-feed video-card-placeholder';
+            ph.dataset.mixIdx = idx;
+            return ph;
+        };
+
+        const hydrate = (centerIdx) => {
+            const lo = Math.max(0, centerIdx - BUFFER);
+            const hi = Math.min(mixItems.length - 1, centerIdx + BUFFER);
+
+            // Destroy video players far from center
+            for (const [i, card] of liveCards) {
+                if (i < lo || i > hi) {
+                    const ph = makePlaceholder(i);
+                    const slot = feed.children[i];
+                    if (slot) { feed.replaceChild(ph, slot); mixObserver.observe(ph); }
+                    if (card._player) { card._player.destroy(); card._player = null; }
+                    liveCards.delete(i);
                 }
-                // Update counter
-                if (entry.isIntersecting) {
-                    const idx = entry.target.dataset.mixIdx;
-                    if (idx) {
-                        countBadge.textContent = `${parseInt(idx) + 1} / ${mixItems.length}`;
+            }
+
+            // Build live cards within buffer
+            for (let i = lo; i <= hi; i++) {
+                const slot = feed.children[i];
+                if (!slot || slot.classList.contains('video-card-placeholder')) {
+                    const item = mixItems[i];
+                    let card;
+                    if (item.type === 'video') {
+                        card = buildVideoCard(item.data, i);
+                        liveCards.set(i, card);
+                    } else {
+                        card = buildImageCard(item.data, i);
                     }
+                    if (slot) { feed.replaceChild(card, slot); mixObserver.observe(card); }
+                }
+            }
+        };
+
+        const mixObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                const el = entry.target;
+                const mixIdx = parseInt(el.dataset.mixIdx, 10);
+                if (isNaN(mixIdx)) return;
+
+                if (entry.isIntersecting) {
+                    countBadge.textContent = `${mixIdx + 1} / ${mixItems.length}`;
+                    hydrate(mixIdx);
+                    const card = liveCards.get(mixIdx); // only for video cards
+                    if (card?._player) card._player.activate();
+                } else {
+                    liveCards.get(mixIdx)?._player?.deactivate();
                 }
             });
-        }, { root: null, threshold: 0.6 });
+        }, { root: feed, threshold: 0.5 });
 
-        mixItems.forEach((item, i) => {
-            if (item.type === 'video') {
-                const video = item.data;
-                const card = document.createElement('div');
-                card.dataset.mixIdx = i;
-                const isPortrait = isPortraitVideo(video);
-                card.className = `video-card-feed${isPortrait ? ' portrait' : ''}`;
-
-                const playerContainer = document.createElement('div');
-                playerContainer.className = 'feed-player-container';
-                const player = new Player(playerContainer, video.baseUrl, video.baseUrl, { lazy: true, mediaItemId: video.id });
-                card._player = player;
-
-                if (!isPortrait && player.video) {
-                    player.video.addEventListener('loadedmetadata', () => {
-                        if (player.video.videoHeight > player.video.videoWidth) card.classList.add('portrait');
-                    });
-                }
-
-                const infoOverlay = document.createElement('div');
-                infoOverlay.className = 'feed-info-overlay';
-                infoOverlay.innerHTML = `<h3>🎬 ${video.filename}</h3>`;
-
-                const actions = document.createElement('div');
-                actions.className = 'feed-actions';
-                actions.innerHTML = `
-                    <button class="btn-icon like-btn" title="Like">${Likes.isLiked(video.id) ? '❤️' : '🤍'}</button>
-                    <button class="btn-icon share-btn" title="Copy Link">🔗</button>
-                `;
-                actions.querySelector('.like-btn').onclick = (e) => {
-                    e.stopPropagation();
-                    const isLiked = Likes.toggleLike(video);
-                    e.currentTarget.textContent = isLiked ? '❤️' : '🤍';
-                };
-                actions.querySelector('.share-btn').onclick = (e) => {
-                    e.stopPropagation();
-                    if (video._isLocal) { Toast.show('Link available after upload', 'info'); return; }
-                    navigator.clipboard.writeText(`${window.location.origin}/#/video?id=${video.id}`);
-                    Toast.show('Link copied!');
-                };
-
-                card.appendChild(playerContainer);
-                card.appendChild(infoOverlay);
-                card.appendChild(actions);
-                feed.appendChild(card);
-                observer.observe(card);
-
+        // Populate with placeholder for video, real card for images (images are cheap)
+        const fragment = document.createDocumentFragment();
+        for (let i = 0; i < mixItems.length; i++) {
+            const item = mixItems[i];
+            if (item.type === 'image') {
+                fragment.appendChild(buildImageCard(item.data, i)); // always build cheaply
             } else {
-                // Image card
-                const image = item.data;
-                const card = document.createElement('div');
-                card.className = 'video-card-feed gallery-card';
-                card.dataset.mixIdx = i;
-
-                const imgContainer = document.createElement('div');
-                imgContainer.className = 'gallery-img-container';
-
-                const img = document.createElement('img');
-                img.src = Gallery.getImageURL(image);
-                img.alt = image.filename || 'Image';
-                img.draggable = false;
-                img.loading = 'lazy';
-                img.decoding = 'async';
-
-                const meta = image.mediaMetadata || {};
-                const w = parseInt(meta.width) || 0;
-                const h = parseInt(meta.height) || 0;
-                if (h > w * 1.2) {
-                    card.classList.add('portrait');
-                    img.classList.add('gallery-img-portrait');
-                } else {
-                    img.classList.add('gallery-img-landscape');
-                }
-
-                imgContainer.appendChild(img);
-                card.appendChild(imgContainer);
-
-                const info = document.createElement('div');
-                info.className = 'feed-info-overlay';
-                info.innerHTML = `<h3>🖼️ ${image.filename || 'Image'}</h3>`;
-                card.appendChild(info);
-
-                const actions = document.createElement('div');
-                actions.className = 'feed-actions';
-                actions.innerHTML = `
-                    <button class="btn-icon edit-btn" title="AI Retouch">🪄</button>
-                `;
-                actions.querySelector('.edit-btn').onclick = (e) => {
-                    e.stopPropagation();
-                    FaceEditor.open(image);
-                };
-                card.appendChild(actions);
-
-                feed.appendChild(card);
-                observer.observe(card);
+                fragment.appendChild(makePlaceholder(i)); // defer player creation
             }
-        });
+        }
+        feed.appendChild(fragment);
+
+        // Observe all initial children
+        Array.from(feed.children).forEach(el => mixObserver.observe(el));
+
+        // Keep new elements observed
+        new MutationObserver(muts => {
+            muts.forEach(m => {
+                m.addedNodes.forEach(n => { if (n.nodeType === 1) mixObserver.observe(n); });
+                m.removedNodes.forEach(n => { if (n.nodeType === 1) mixObserver.unobserve(n); });
+            });
+        }).observe(feed, { childList: true });
+
+        // Hydrate the first few immediately
+        hydrate(0);
+
 
         container.appendChild(feed);
         HypnoPopups.attach(container);

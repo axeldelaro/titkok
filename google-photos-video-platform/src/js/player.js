@@ -20,7 +20,7 @@ export default class Player {
         this._filters = [
             { name: 'Normal', css: 'none' },
             { name: 'Lèvres', css: 'saturate(3) hue-rotate(-20deg) contrast(1.1)' },
-            { name: 'Inversion', css: 'invert(1)' },
+            { name: 'Inversion', css: 'invert(1) hue-rotate(180deg)' },
             { name: 'Ghost Trail', css: 'none', delay: true },
         ];
 
