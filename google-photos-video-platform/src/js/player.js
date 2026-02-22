@@ -241,9 +241,10 @@ export default class Player {
         } else {
             this.startPlayback();
         }
-        // Resume delay loop if Ghost Trail is active and loop was stopped
-        if (this._filters[this._filterIndex]?.delay && !this._delayRunning) {
-            this._startDelayLoop();
+        // Resume / start Ghost Trail loop if active
+        if (this._filters[this._filterIndex]?.delay) {
+            if (!this._delayCanvas) this._setupDelayCanvas(); // create canvas if missing
+            if (!this._delayRunning) this._startDelayLoop();
         }
     }
 
@@ -379,8 +380,8 @@ export default class Player {
             this._delayStrength = parseFloat(e.target.value);
             localStorage.setItem('playerDelayStrength', this._delayStrength);
             delayLabel.textContent = `${Math.round(this._delayStrength * 100)}%`;
-            // Update alpha live without restarting the loop
-            this._delayFadeAlpha = this._strengthToAlpha(this._delayStrength);
+            // Update fade rate live — loop reads this on next tick
+            this._delayFadeRate = this._strengthToFadeRate(this._delayStrength);
         };
 
         // ── Cinema ────────────────────────────────────────────────────
@@ -497,34 +498,44 @@ export default class Player {
         }
     }
 
-    // ── Ghost Trail implementation ────────────────────────────────────
-    // strength → fadeAlpha : 0 = longest trail,  1 = shortest trail
-    _strengthToAlpha(strength) {
-        return 0.01 + strength * 0.49; // 0.01 … 0.50
+    // ─────────────────────────────────────────────────────────────────
+    // MOTION TRAIL — feedback loop with ping-pong canvas
+    //
+    // Algorithm each frame:
+    //   1. Fade the accumulator canvas toward black  (dims old positions)
+    //   2. Draw current video frame at FULL opacity   (current pos = crisp)
+    //   3. Copy result back to accumulator            (for next frame)
+    //
+    // Slider: RIGHT = longer trail, LEFT = shorter trail
+    //   strength=0 → fadeRate=0.5 (fast fade, short trail)
+    //   strength=1 → fadeRate=0.01 (slow fade, very long trail)
+    // ─────────────────────────────────────────────────────────────────
+
+    _strengthToFadeRate(strength) {
+        // Invert: right slider = more trail = slower fade
+        return 0.01 + (1 - strength) * 0.49; // 0.01 … 0.50
     }
 
     _setupDelayCanvas() {
-        // Remove existing canvas if any
         this._removeDelayCanvas();
 
+        // Main (visible) canvas
         const canvas = document.createElement('canvas');
         canvas.className = 'delay-canvas';
-        canvas.style.cssText = [
-            'position:absolute', 'top:0', 'left:0',
-            'width:100%', 'height:100%',
-            'pointer-events:none',
-            'z-index:2',
-            'display:block',
-        ].join(';');
-
-        // Insert before controls so controls stay on top
+        canvas.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:2;display:block;';
         this.container.insertBefore(canvas, this.controls);
+
+        // Offscreen accumulator (ping-pong partner)
+        const acc = document.createElement('canvas');
+
         this._delayCanvas = canvas;
         this._delayCtx = canvas.getContext('2d', { willReadFrequently: false, alpha: false });
-        this._delayFadeAlpha = this._strengthToAlpha(this._delayStrength);
+        this._accCanvas = acc;
+        this._accCtx = acc.getContext('2d', { willReadFrequently: false, alpha: false });
+        this._delayFadeRate = this._strengthToFadeRate(this._delayStrength);
         this._delayCW = 0; this._delayCH = 0;
 
-        // Hide the native video element — canvas replaces it visually
+        // Hide native video — canvas replaces it visually
         this.video.style.opacity = '0';
     }
 
@@ -534,48 +545,58 @@ export default class Player {
             this._delayCanvas = null;
             this._delayCtx = null;
         }
+        this._accCanvas = null;
+        this._accCtx = null;
     }
 
     _startDelayLoop() {
-        if (this._delayRunning) return; // already running
-        if (!this._delayCanvas) return; // no canvas
+        if (this._delayRunning) return;
+        if (!this._delayCanvas) return;
         this._delayRunning = true;
 
-        const canvas = this._delayCanvas;
         const loop = () => {
-            if (!this._delayRunning) return; // stopped externally
+            if (!this._delayRunning) return;
             this._rafId = requestAnimationFrame(loop);
 
             const ctx = this._delayCtx;
-            if (!ctx) return;
+            const aCtx = this._accCtx;
+            if (!ctx || !aCtx) return;
 
-            // Skip drawing while paused or not ready — keep RAF alive
+            // Wait until video is playing and has dimensions
             if (this.video.paused || this.video.readyState < 2) return;
 
             const vw = this.video.videoWidth || 640;
             const vh = this.video.videoHeight || 360;
 
-            // Resize canvas only when dimensions change
+            // Resize both canvases on dimension change, fill black
             if (this._delayCW !== vw || this._delayCH !== vh) {
                 this._delayCW = vw; this._delayCH = vh;
-                canvas.width = vw; canvas.height = vh;
-                // Fill black so trail starts cleanly
-                ctx.fillStyle = '#000';
-                ctx.fillRect(0, 0, vw, vh);
+                this._delayCanvas.width = vw; this._delayCanvas.height = vh;
+                this._accCanvas.width = vw; this._accCanvas.height = vh;
+                ctx.fillStyle = '#000'; ctx.fillRect(0, 0, vw, vh);
+                aCtx.fillStyle = '#000'; aCtx.fillRect(0, 0, vw, vh);
             }
 
-            const alpha = this._delayFadeAlpha;
+            // Read current fade rate (updated live by slider)
+            const fadeRate = this._delayFadeRate; // 0.01=long trail … 0.50=short trail
 
-            // 1. Fade existing content → creates the ghost trail
-            ctx.globalCompositeOperation = 'source-over';
-            ctx.globalAlpha = alpha;
+            // ── Step 1: Copy accumulator → main canvas, faded toward black ──
+            // Overwrite main canvas with black first
+            ctx.globalAlpha = 1;
             ctx.fillStyle = '#000';
             ctx.fillRect(0, 0, vw, vh);
+            // Draw accumulator at (1 - fadeRate) opacity → dim old content
+            ctx.globalAlpha = 1 - fadeRate;
+            ctx.drawImage(this._accCanvas, 0, 0);
 
-            // 2. Draw current video frame on top
-            ctx.globalAlpha = 0.92;
+            // ── Step 2: Draw current video frame at FULL opacity ──
+            // Current positions are fully bright; old positions trail as they fade
+            ctx.globalAlpha = 1.0;
             ctx.drawImage(this.video, 0, 0, vw, vh);
-            ctx.globalAlpha = 1;
+
+            // ── Step 3: Copy result → accumulator for next frame ──
+            aCtx.globalAlpha = 1;
+            aCtx.drawImage(this._delayCanvas, 0, 0);
         };
 
         this._rafId = requestAnimationFrame(loop);

@@ -515,6 +515,9 @@ const UI = {
             container.appendChild(countBadge);
 
             container.appendChild(feed);
+            // Explicitly activate the first card immediately so the first video plays
+            // (IntersectionObserver fires async, this guarantees instant start)
+            requestAnimationFrame(() => { liveCards.get(0)?._player?.activate(); });
             VisualEditor.reapply();
             UI._prefetchMedia(videos, 0, 20);
 
@@ -998,7 +1001,7 @@ const UI = {
                     liveCards.get(mixIdx)?._player?.deactivate();
                 }
             });
-        }, { root: feed, threshold: 0.5 });
+        }, { root: null, threshold: 0.5 });
 
         // Populate with placeholder for video, real card for images (images are cheap)
         const fragment = document.createDocumentFragment();
@@ -1028,6 +1031,8 @@ const UI = {
 
 
         container.appendChild(feed);
+        // Explicitly activate the first video card
+        requestAnimationFrame(() => { liveCards.get(0)?._player?.activate(); });
         HypnoPopups.attach(container);
         // Reapply visual editor filters + prefetch
         VisualEditor.reapply();
