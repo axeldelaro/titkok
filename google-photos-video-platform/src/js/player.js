@@ -265,19 +265,23 @@ export default class Player {
     }
 
     _startTrail() {
-        this._stopTrail(true); // stop previous loop but keep canvas
+        this._stopTrail(true);
         this._trailCW = 0;
         this._trailCH = 0;
         this._trailRunning = true;
 
-        // Hide native video — trail canvas takes over visually
-        this.video.style.opacity = '0';
-        this.video.style.position = 'absolute';
+        // ⚠️ DO NOT hide the video with opacity:0 or visibility:hidden.
+        // Mobile browsers (iOS Safari, Android Chrome) use the video's
+        // visibility to decide whether to keep decoded frames available.
+        // opacity:0 → browser skips rendering → drawImage() gets a black frame.
+        // The opaque canvas (z-index:2) already covers the video visually.
+        this.video.style.visibility = 'visible';
+        this.video.style.opacity = '1';
 
         const canvas = this._trailCanvas;
         const ctx = this._trailCtx;
 
-        // Apply current CSS filter to the canvas element (cross-browser)
+        // Apply current CSS filter to canvas (cross-browser, works on mobile)
         const cssFilter = this._filters[this._filterIndex].css;
         canvas.style.filter = cssFilter === 'none' ? '' : cssFilter;
 
@@ -285,15 +289,14 @@ export default class Player {
             if (!this._trailRunning) return;
             this._trailRaf = requestAnimationFrame(tick);
 
-            // If paused or not ready: keep loop alive but don't draw
-            // (so canvas shows the last frozen trail when paused)
+            // Skip drawing while paused or not ready, but keep loop alive
             if (this.video.paused || this.video.readyState < 2) return;
 
             const vw = this.video.videoWidth;
             const vh = this.video.videoHeight;
             if (!vw || !vh) return;
 
-            // Resize canvas on dimension change, init to black
+            // Resize canvas on dimension change, fill black
             if (this._trailCW !== vw || this._trailCH !== vh) {
                 this._trailCW = vw; this._trailCH = vh;
                 canvas.width = vw; canvas.height = vh;
@@ -303,13 +306,13 @@ export default class Player {
 
             const fadeRate = this._trailFadeRate();
 
-            // 1. Fade toward black (dims old positions → motion trail)
+            // 1. Fade toward black → dims old positions (creates the trail)
             ctx.globalAlpha = fadeRate;
             ctx.fillStyle = '#000';
             ctx.fillRect(0, 0, vw, vh);
 
-            // 2. Draw current video frame at FULL opacity
-            //    → current positions always crisp, only MOVED areas trail
+            // 2. Draw current frame at FULL opacity
+            //    Current positions = crisp. Moved positions = trail.
             ctx.globalAlpha = 1.0;
             ctx.drawImage(this.video, 0, 0, vw, vh);
         };
@@ -321,11 +324,11 @@ export default class Player {
         this._trailRunning = false;
         if (this._trailRaf) { cancelAnimationFrame(this._trailRaf); this._trailRaf = null; }
         if (!keepCanvas) {
-            // Reset canvas and restore video visibility
+            // Black out canvas when stopping
             if (this._trailCtx && this._trailCW && this._trailCH) {
-                this._trailCtx.clearRect(0, 0, this._trailCW, this._trailCH);
+                this._trailCtx.fillStyle = '#000';
+                this._trailCtx.fillRect(0, 0, this._trailCW, this._trailCH);
             }
-            this.video.style.opacity = '1';
         }
     }
 
