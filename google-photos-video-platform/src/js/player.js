@@ -5,7 +5,11 @@ export default class Player {
         this.videoUrl = videoUrl;
         this.posterUrl = posterUrl;
         this.video = null;
-        this.trailVideo = null; // The delayed clone for the ghost trail
+
+        // 5 delayed clones for a fluid ghost trail
+        this.numClones = 5;
+        this.trailVideos = [];
+
         this.controls = null;
         this.isPlaying = false;
         this.hideControlsTimer = null;
@@ -26,8 +30,8 @@ export default class Player {
         if (this._filterIndex >= this._filters.length) this._filterIndex = 0;
 
         // ── Motion Trail strength ─────────────────────────────────────
-        // 0.0 (slider left)  → Delay: 0.05s, opacity: 0.3 (barely visible)
-        // 1.0 (slider right) → Delay: 0.40s, opacity: 0.8 (long heavy trail)
+        // 0.0 (slider left)  → 0 clones active, purely normal video
+        // 1.0 (slider right) → 5 clones active, spaced out, long heavy trail
         this._trailStrength = Math.max(0, Math.min(1,
             parseFloat(localStorage.getItem('trailStrength') ?? '0.5')
         ));
@@ -49,26 +53,30 @@ export default class Player {
         this.container.className = 'player-wrapper';
         this.container.style.backgroundColor = '#000';
 
-        // 1. Trail Video (Background clone)
-        this.trailVideo = document.createElement('video');
-        this.trailVideo.muted = true;
-        this.trailVideo.playsInline = true;
-        this.trailVideo.controls = false;
-        this.trailVideo.loop = true;
-        this.trailVideo.setAttribute('playsinline', '');
-        this.trailVideo.setAttribute('webkit-playsinline', '');
-        this.trailVideo.setAttribute('muted', '');
-        this.trailVideo.style.cssText = [
-            'position:absolute', 'inset:0',
-            'width:100%', 'height:100%',
-            'object-fit:contain',
-            'pointer-events:none',
-            'z-index:1',
-            'opacity:0', // Will be set dynamically by slider
-            'transition:opacity 0.2s',
-            // Default blend mode to make it look like a glowing trail
-            'mix-blend-mode:screen'
-        ].join(';');
+        // 1. Trail Videos (Background clones)
+        for (let i = 0; i < this.numClones; i++) {
+            const clone = document.createElement('video');
+            clone.muted = true;
+            clone.playsInline = true;
+            clone.controls = false;
+            clone.loop = true;
+            clone.setAttribute('playsinline', '');
+            clone.setAttribute('webkit-playsinline', '');
+            clone.setAttribute('muted', '');
+            clone.style.cssText = [
+                'position:absolute', 'inset:0',
+                'width:100%', 'height:100%',
+                'object-fit:contain',
+                'pointer-events:none',
+                'z-index:1',
+                'opacity:0', // Dynamically updated by slider
+                'transition:opacity 0.2s',
+                // Default blend mode for glowing effect
+                'mix-blend-mode:screen'
+            ].join(';');
+            this.trailVideos.push(clone);
+            this.container.appendChild(clone);
+        }
 
         // 2. Main Video (Foreground)
         this.video = document.createElement('video');
@@ -86,15 +94,17 @@ export default class Player {
             'object-fit:contain',
             'z-index:2',
             'touch-action:pan-y',
-            // Semi-transparent so the trail behind it is visible
-            'opacity:0.85',
+            'opacity:0.85', // Semi-transparent to let trail bleed through
+            'transition:opacity 0.2s',
         ].join(';');
+        this.container.appendChild(this.video);
 
         // Loading overlay
         this.loadingOverlay = document.createElement('div');
         this.loadingOverlay.className = 'player-loading-overlay player-overlay-hidden';
         this.loadingOverlay.style.zIndex = '3';
         this.loadingOverlay.innerHTML = '<div class="player-spinner"></div><span>Loading…</span>';
+        this.container.appendChild(this.loadingOverlay);
 
         // Error overlay
         this.errorOverlay = document.createElement('div');
@@ -107,6 +117,7 @@ export default class Player {
         this.errorOverlay.querySelector('.player-retry-btn').onclick = () => {
             this._retryCount = 0; this.hideError(); this._retryPlayback();
         };
+        this.container.appendChild(this.errorOverlay);
 
         // Controls
         this.controls = document.createElement('div');
@@ -141,12 +152,6 @@ export default class Player {
                 <button class="pip-btn"               title="PiP">🖼</button>
                 <button class="fullscreen-btn"        title="Fullscreen (F)">⛶</button>
             </div>`;
-
-        // Build: trailVideo → mainVideo → overlays → controls
-        this.container.appendChild(this.trailVideo);
-        this.container.appendChild(this.video);
-        this.container.appendChild(this.loadingOverlay);
-        this.container.appendChild(this.errorOverlay);
         this.container.appendChild(this.controls);
         this.container.style.touchAction = 'pan-y';
 
@@ -188,13 +193,13 @@ export default class Player {
             } else { this.hideLoading(); this.showError(); }
         });
 
-        // Keep the trail video strictly playing when main video plays
+        // Keep the trail videos strictly playing when main video plays
         this.video.addEventListener('play', () => {
             this._syncTrailVideo();
-            this.trailVideo.play().catch(() => { });
+            this.trailVideos.forEach(v => v.play().catch(() => { }));
         });
         this.video.addEventListener('pause', () => {
-            this.trailVideo.pause();
+            this.trailVideos.forEach(v => v.pause());
         });
         this.video.addEventListener('seeked', () => {
             this._syncTrailVideo();
@@ -208,7 +213,7 @@ export default class Player {
         const cssFilter = this._filters[this._filterIndex].css;
         const filterStr = cssFilter === 'none' ? '' : cssFilter;
         this.video.style.filter = filterStr;
-        this.trailVideo.style.filter = filterStr;
+        this.trailVideos.forEach(v => v.style.filter = filterStr);
     }
 
     // ── Overlays ──────────────────────────────────────────────────────
@@ -245,8 +250,12 @@ export default class Player {
                 if (fresh?.baseUrl) {
                     this.videoUrl = fresh.baseUrl;
                     const fsrc = `${fresh.baseUrl}=dv`;
-                    this.video.src = fsrc; this.trailVideo.src = fsrc;
-                    this.video.load(); this.trailVideo.load();
+                    this.video.src = fsrc;
+                    this.trailVideos.forEach(v => v.src = fsrc);
+
+                    this.video.load();
+                    this.trailVideos.forEach(v => v.load());
+
                     this.video.play().catch(() => { });
                     return;
                 }
@@ -254,8 +263,12 @@ export default class Player {
         }
 
         const fallbackSrc = `${src}&_t=${Date.now()}`;
-        this.video.src = fallbackSrc; this.trailVideo.src = fallbackSrc;
-        this.video.load(); this.trailVideo.load();
+        this.video.src = fallbackSrc;
+        this.trailVideos.forEach(v => v.src = fallbackSrc);
+
+        this.video.load();
+        this.trailVideos.forEach(v => v.load());
+
         this.video.play().catch(() => { });
     }
 
@@ -266,16 +279,16 @@ export default class Player {
 
         const src = this.isBlob ? this.videoUrl : `${this.videoUrl}=dv`;
         this.video.src = src;
-        this.trailVideo.src = src;
+        this.trailVideos.forEach(v => v.src = src);
 
         this.video.preload = 'auto';
-        this.trailVideo.preload = 'auto';
+        this.trailVideos.forEach(v => v.preload = 'auto');
 
         this.video.load();
-        this.trailVideo.load();
+        this.trailVideos.forEach(v => v.load());
 
         this.video.play().catch(() => { });
-        this.trailVideo.play().catch(() => { });
+        this.trailVideos.forEach(v => v.play().catch(() => { }));
 
         this._updateTrailVisuals();
 
@@ -300,63 +313,90 @@ export default class Player {
 
         const src = this.isBlob ? this.videoUrl : `${this.videoUrl}=dv`;
         this.video.src = src;
-        this.trailVideo.src = src;
+        this.trailVideos.forEach(v => v.src = src);
 
         this.video.preload = 'auto';
-        this.trailVideo.preload = 'auto';
+        this.trailVideos.forEach(v => v.preload = 'auto');
+
         this.video.load();
-        this.trailVideo.load();
+        this.trailVideos.forEach(v => v.load());
     }
 
     deactivate() {
         this._saveProgress();
         this.video.pause();
-        this.trailVideo.pause();
+        this.trailVideos.forEach(v => v.pause());
         this._stopSyncLoop();
     }
 
-    // ─── DOM MOTION TRAIL (Clone Sync) ────────────────────────────────
+    // ─── MULTI-CLONE TRAIL SYNC ───────────────────────────────────────
 
     _updateTrailVisuals() {
-        // Slider at 0 (left):   delay 0.05s, opacity 0.2 (weak, short)
-        // Slider at 1 (right):  delay 0.40s, opacity 0.8 (strong, long)
         const s = this._trailStrength;
-        const targetOpacity = 0.2 + (s * 0.6); // 0.2 to 0.8 opacity
 
-        // If slider is exactly 0, hide it completely for pure normal playback
-        this.trailVideo.style.opacity = s === 0 ? '0' : targetOpacity.toString();
+        if (s === 0) {
+            this.video.style.opacity = '1';
+            this.trailVideos.forEach(v => v.style.opacity = '0');
+            return;
+        }
 
-        // Main video opacity decreases slightly as trail gets stronger 
-        // to let the trail shine through more
+        // As strength increases, main video gets slightly transparent to let trail shine
         this.video.style.opacity = (0.95 - (s * 0.15)).toString();
+
+        // Calculate how many clones to show based on strength
+        // At 0.2, show 1 clone. At 1.0, show all 5.
+        const activeClones = Math.max(1, Math.round(s * this.numClones));
+
+        // Base opacity for the clones (gets stronger with slider)
+        const baseOpacity = 0.2 + (s * 0.6);
+
+        for (let i = 0; i < this.numClones; i++) {
+            const clone = this.trailVideos[i];
+
+            if (i < activeClones) {
+                // Fade out the further back the clone is
+                const decay = 1 - (i * 0.15);
+                const finalOpacity = Math.max(0, baseOpacity * decay);
+                clone.style.opacity = finalOpacity.toString();
+            } else {
+                clone.style.opacity = '0';
+            }
+        }
     }
 
     _syncTrailVideo() {
-        if (this.video.readyState < 2 || this.trailVideo.readyState < 2) return;
+        if (this.video.readyState < 2) return;
 
         const s = this._trailStrength;
-        if (s === 0) return; // Don't bother syncing if it's disabled
+        if (s === 0) return;
 
-        const targetDelay = 0.05 + (s * 0.35); // 0.05s to 0.40s behind
-        const targetTime = Math.max(0, this.video.currentTime - targetDelay);
+        // At low strength, clones are tightly packed (0.04s apart)
+        // At high strength, they space out more (0.08s apart)
+        const gap = 0.04 + (s * 0.04);
 
-        const drift = Math.abs(this.trailVideo.currentTime - targetTime);
+        for (let i = 0; i < this.numClones; i++) {
+            const clone = this.trailVideos[i];
+            if (clone.style.opacity === '0' || clone.readyState < 2) continue;
 
-        // If the clone has drifted more than 0.15s away from its target delay, snap it back
-        // We allow some drift so we aren't constantly seeking (which stutters video)
-        if (drift > 0.15) {
-            this.trailVideo.currentTime = targetTime;
-        }
+            // i=0 is the closest clone (-gap), i=4 is the furthest (-5*gap)
+            const targetDelay = gap * (i + 1);
+            const targetTime = Math.max(0, this.video.currentTime - targetDelay);
 
-        // Keep playback rates synced
-        if (this.trailVideo.playbackRate !== this.video.playbackRate) {
-            this.trailVideo.playbackRate = this.video.playbackRate;
+            const drift = Math.abs(clone.currentTime - targetTime);
+
+            // Allow slight drift before hard snapping to prevent constant stuttering
+            if (drift > 0.15) {
+                clone.currentTime = targetTime;
+            }
+
+            if (clone.playbackRate !== this.video.playbackRate) {
+                clone.playbackRate = this.video.playbackRate;
+            }
         }
     }
 
     _startSyncLoop() {
         if (this._trailSyncInterval) return;
-        // Check sync every 100ms
         this._trailSyncInterval = setInterval(() => this._syncTrailVideo(), 100);
     }
 
@@ -387,7 +427,6 @@ export default class Player {
         const trailSlider = this.controls.querySelector('.trail-slider');
         const trailLabel = this.controls.querySelector('.trail-label');
 
-        // Init trail slider display
         trailSlider.value = this._trailStrength;
         trailLabel.textContent = `${Math.round(this._trailStrength * 100)}%`;
 
@@ -395,12 +434,12 @@ export default class Player {
         const togglePlay = () => {
             if (this.video.paused) {
                 this.video.play();
-                this.trailVideo.play();
+                this.trailVideos.forEach(v => v.play().catch(() => { }));
                 playBtn.textContent = '⏸';
                 this.isPlaying = true;
             } else {
                 this.video.pause();
-                this.trailVideo.pause();
+                this.trailVideos.forEach(v => v.pause());
                 playBtn.textContent = '▶';
                 this.isPlaying = false;
             }
@@ -488,7 +527,7 @@ export default class Player {
         loopBtn.style.opacity = this.video.loop ? '1' : '0.5';
         loopBtn.onclick = () => {
             this.video.loop = !this.video.loop;
-            this.trailVideo.loop = this.video.loop;
+            this.trailVideos.forEach(v => v.loop = this.video.loop);
             loopBtn.style.opacity = this.video.loop ? '1' : '0.5';
         };
 
@@ -539,7 +578,7 @@ export default class Player {
             speedIdx = (speedIdx + 1) % speeds.length;
             const rate = speeds[speedIdx];
             this.video.playbackRate = rate;
-            this.trailVideo.playbackRate = rate;
+            this.trailVideos.forEach(v => v.playbackRate = rate);
             speedBtn.textContent = `${rate}×`;
         };
 
@@ -574,7 +613,7 @@ export default class Player {
     _applyZoom() {
         const t = `scale(${this._zoomLevel}) translate(${this._panX / this._zoomLevel}px, ${this._panY / this._zoomLevel}px)`;
         this.video.style.transform = t;
-        this.trailVideo.style.transform = t;
+        this.trailVideos.forEach(v => v.style.transform = t);
     }
 
     formatTime(s) {
@@ -593,6 +632,8 @@ export default class Player {
         clearTimeout(this.hideControlsTimer);
         clearTimeout(this._loadingTimeout);
         if (this.video) { this.video.pause(); this.video.removeAttribute('src'); this.video.load(); }
-        if (this.trailVideo) { this.trailVideo.pause(); this.trailVideo.removeAttribute('src'); this.trailVideo.load(); }
+        this.trailVideos.forEach(v => {
+            v.pause(); v.removeAttribute('src'); v.load();
+        });
     }
 }
