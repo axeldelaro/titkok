@@ -148,8 +148,8 @@
     /* Player controls always visible on mobile (no hover) */
     .player-controls {
         opacity: 1 !important;
-        bottom: 65px;
-        padding-bottom: 0.5rem;
+        bottom: 0;
+        padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
     }
 
     .player-controls .play-btn,
@@ -178,6 +178,23 @@
         min-width: 40px;
         min-height: 40px;
         font-size: 1.1rem !important;
+        touch-action: manipulation;
+    }
+
+    /* Ghost Trail slider — always show and touch-friendly on mobile */
+    .delay-strength-row {
+        display: flex !important;
+        padding: 0 0.5rem;
+    }
+
+    .delay-strength-slider {
+        height: 6px;
+        min-width: 80px;
+    }
+
+    .delay-strength-slider::-webkit-slider-thumb {
+        width: 20px;
+        height: 20px;
     }
 
     /* Feed overlay: position above the bottom nav bar */
@@ -198,6 +215,7 @@
         width: 44px;
         height: 44px;
         font-size: 1.2rem;
+        touch-action: manipulation;
     }
 
     /* Feed container should account for bottom nav */

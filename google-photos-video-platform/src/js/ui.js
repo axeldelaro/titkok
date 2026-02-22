@@ -263,7 +263,7 @@ const UI = {
         }
     },
 
-    renderHome: async (container) => {
+    renderHome: async (container) => { /* VIRTUALIZED */
         container.className = 'content feed-container';
 
         try {
@@ -310,13 +310,12 @@ const UI = {
             const feed = document.createElement('div');
             feed.className = 'video-feed';
 
-            // Shuffle button — floating on top of the feed
+            // Shuffle button
             const shuffleBtn = document.createElement('button');
             shuffleBtn.className = 'feed-shuffle-btn';
             shuffleBtn.innerHTML = '🔀';
             shuffleBtn.title = 'Shuffle';
             shuffleBtn.onclick = () => {
-                // Fisher-Yates shuffle
                 const arr = Store.get('videos');
                 for (let i = arr.length - 1; i > 0; i--) {
                     const j = Math.floor(Math.random() * (i + 1));
@@ -328,84 +327,55 @@ const UI = {
             };
             container.appendChild(shuffleBtn);
 
-
-
             // Helper: detect portrait from metadata
             const isPortraitVideo = (video) => {
                 const meta = video.mediaMetadata || {};
-                // Try top-level width/height first
                 let w = parseInt(meta.width) || 0;
                 let h = parseInt(meta.height) || 0;
-                // Fallback: check inside mediaMetadata.video
-                if ((!w || !h) && meta.video) {
-                    w = parseInt(meta.video.width) || w;
-                    h = parseInt(meta.video.height) || h;
-                }
+                if ((!w || !h) && meta.video) { w = parseInt(meta.video.width) || w; h = parseInt(meta.video.height) || h; }
                 return h > w && w > 0;
             };
 
-            // Nombre de vidéos à précharger en avance
-            const PRELOAD_AHEAD = (() => {
-                const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
-                if (conn?.saveData || conn?.effectiveType === '2g') return 0;
-                if (conn?.effectiveType === '3g') return 1;
-                return 2; // 4G / WiFi : précharger les 2 suivantes
-            })();
+            const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+            const PRELOAD_AHEAD = conn?.saveData || conn?.effectiveType === '2g' ? 0
+                : conn?.effectiveType === '3g' ? 1 : 2;
 
-            // Lazy-load observer — active/désactive les players visibles
-            // + précharge en arrière-plan les N suivantes
-            const observer = new IntersectionObserver((entries) => {
-                entries.forEach(entry => {
-                    const card = entry.target;
-                    const player = card._player;
-                    if (!player) return;
+            // ─── VIRTUAL DOM POOL ───────────────────────────────────────────────
+            // Only BUFFER cards above/below the current visible card have live Players.
+            // All other positions are lightweight placeholder divs.
+            // This prevents 800 simultaneous Player instances and canvas RAF loops.
+            const BUFFER = 4;
+            const liveCards = new Map(); // index → card element with _player
 
-                    if (entry.isIntersecting) {
-                        player.activate();
+            const makePlaceholder = (idx) => {
+                const ph = document.createElement('div');
+                ph.className = 'video-card-feed video-card-placeholder';
+                ph.dataset.vidIdx = idx;
+                return ph;
+            };
 
-                        // ── Look-ahead : précharger les vidéos suivantes ──
-                        if (PRELOAD_AHEAD > 0) {
-                            const allCards = [...feed.querySelectorAll('.video-card-feed')];
-                            const idx = allCards.indexOf(card);
-                            for (let offset = 1; offset <= PRELOAD_AHEAD; offset++) {
-                                const nextCard = allCards[idx + offset];
-                                if (nextCard?._player) nextCard._player.preload();
-                            }
-                        }
-                    } else {
-                        player.deactivate();
-                    }
-                });
-            }, { root: null, threshold: 0.6 });
-
-            // Helper: create and append a video card
-            const createVideoCard = (video) => {
+            const buildCard = (video, idx) => {
                 const card = document.createElement('div');
+                card.dataset.vidIdx = idx;
                 card.dataset.id = video.id;
-
                 const isPortrait = isPortraitVideo(video);
                 card.className = `video-card-feed${isPortrait ? ' portrait' : ''}`;
 
                 const playerContainer = document.createElement('div');
                 playerContainer.className = 'feed-player-container';
                 const player = new Player(playerContainer, video.baseUrl, video.baseUrl, { lazy: true, mediaItemId: video.id });
-
                 card._player = player;
 
                 if (!isPortrait && player.video) {
                     player.video.addEventListener('loadedmetadata', () => {
-                        if (player.video.videoHeight > player.video.videoWidth) {
-                            card.classList.add('portrait');
-                        }
+                        if (player.video.videoHeight > player.video.videoWidth) card.classList.add('portrait');
                     });
                 }
 
-                // Info overlay
                 const infoOverlay = document.createElement('div');
                 infoOverlay.className = 'feed-info-overlay';
                 infoOverlay.innerHTML = `<h3>${video.filename}</h3>`;
 
-                // Action buttons
                 const actions = document.createElement('div');
                 actions.className = 'feed-actions';
                 actions.innerHTML = `
@@ -413,31 +383,26 @@ const UI = {
                     <button class="btn-icon share-btn" title="Copy Link">🔗</button>
                     <button class="btn-icon delete-btn" title="Remove from feed">🗑️</button>
                 `;
-
                 actions.querySelector('.like-btn').onclick = (e) => {
                     e.stopPropagation();
-                    const isLiked = Likes.toggleLike(video);
-                    e.currentTarget.textContent = isLiked ? '❤️' : '🤍';
+                    e.currentTarget.textContent = Likes.toggleLike(video) ? '❤️' : '🤍';
                 };
-
                 actions.querySelector('.share-btn').onclick = (e) => {
                     e.stopPropagation();
-                    if (video._isLocal) {
-                        Toast.show('Link available after upload completes', 'info');
-                        return;
-                    }
+                    if (video._isLocal) { Toast.show('Link available after upload completes', 'info'); return; }
                     navigator.clipboard.writeText(`${window.location.origin}/#/video?id=${video.id}`);
                     Toast.show('Link copied!');
                 };
-
                 actions.querySelector('.delete-btn').onclick = (e) => {
                     e.stopPropagation();
-                    // Revoke blob URL to free memory
-                    if (video._isLocal && video.baseUrl) {
-                        try { URL.revokeObjectURL(video.baseUrl); } catch (ex) { }
-                    }
+                    if (video._isLocal && video.baseUrl) { try { URL.revokeObjectURL(video.baseUrl); } catch (ex) { } }
                     Store.removeVideo(video.id);
-                    card.remove();
+                    const ph = makePlaceholder(idx);
+                    if (card.parentNode) feed.replaceChild(ph, card);
+                    if (card._player) { card._player.destroy(); card._player = null; }
+                    liveCards.delete(idx);
+                    // Re-observe the placeholder
+                    visibilityObserver.observe(ph);
                     Toast.show('Video removed from feed');
                 };
 
@@ -445,12 +410,11 @@ const UI = {
                 card.appendChild(infoOverlay);
                 card.appendChild(actions);
 
-                // #1 Double-Tap Like
+                // Double-Tap Like
                 let lastTap = 0;
                 playerContainer.addEventListener('pointerdown', (e) => {
                     const now = Date.now();
                     if (now - lastTap < 300) {
-                        // Double tap!
                         if (!Likes.isLiked(video.id)) Likes.toggleLike(video);
                         actions.querySelector('.like-btn').textContent = '❤️';
                         const heart = document.createElement('div');
@@ -463,24 +427,86 @@ const UI = {
                     lastTap = now;
                 });
 
-                // #3 Auto-Play Next (listen for videoEnded)
+                // Auto-Play Next
                 playerContainer.addEventListener('videoEnded', () => {
-                    const allCards = [...feed.querySelectorAll('.video-card-feed')];
-                    const idx = allCards.indexOf(card);
-                    if (idx >= 0 && idx < allCards.length - 1) {
-                        allCards[idx + 1].scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    }
+                    const next = feed.children[idx + 1];
+                    if (next) next.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 });
 
-                // #14 Add to History
                 History.addToHistory(video);
-
-                feed.appendChild(card);
-                observer.observe(card);
+                return card;
             };
 
-            // Render all videos
-            videos.forEach(video => createVideoCard(video));
+            // Hydrate: ensure live players exist in [lo, hi]
+            const hydrate = (centerIdx) => {
+                const lo = Math.max(0, centerIdx - BUFFER);
+                const hi = Math.min(videos.length - 1, centerIdx + BUFFER);
+
+                // Destroy far-away cards
+                for (const [i, card] of liveCards) {
+                    if (i < lo || i > hi) {
+                        const ph = makePlaceholder(i);
+                        const slot = feed.children[i];
+                        if (slot && slot !== ph) { feed.replaceChild(ph, slot); visibilityObserver.observe(ph); }
+                        if (card._player) { card._player.destroy(); card._player = null; }
+                        liveCards.delete(i);
+                    }
+                }
+
+                // Build cards within the buffer
+                for (let i = lo; i <= hi; i++) {
+                    if (!liveCards.has(i)) {
+                        const card = buildCard(videos[i], i);
+                        liveCards.set(i, card);
+                        const slot = feed.children[i];
+                        if (slot) { feed.replaceChild(card, slot); visibilityObserver.observe(card); }
+                    }
+                }
+
+                // Preload slightly beyond buffer
+                for (let offset = 1; offset <= PRELOAD_AHEAD; offset++) {
+                    [centerIdx + BUFFER + offset, centerIdx - BUFFER - offset].forEach(pi => {
+                        if (pi >= 0 && pi < videos.length) liveCards.get(pi)?._player?.preload();
+                    });
+                }
+            };
+
+            // Observer: activate visible card, deactivate non-visible, hydrate around visible
+            const visibilityObserver = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    const vidIdx = parseInt(entry.target.dataset.vidIdx, 10);
+                    if (isNaN(vidIdx)) return;
+                    if (entry.isIntersecting) {
+                        hydrate(vidIdx);
+                        const card = liveCards.get(vidIdx);
+                        if (card?._player) card._player.activate();
+                        for (let off = 1; off <= PRELOAD_AHEAD; off++) {
+                            liveCards.get(vidIdx + off)?._player?.preload();
+                        }
+                    } else {
+                        liveCards.get(vidIdx)?._player?.deactivate();
+                    }
+                });
+            }, { root: feed, threshold: 0.5 });
+
+            // ── Populate with placeholders ───────────────────────────
+            const fragment = document.createDocumentFragment();
+            for (let i = 0; i < videos.length; i++) fragment.appendChild(makePlaceholder(i));
+            feed.appendChild(fragment);
+
+            // Observe all placeholders
+            Array.from(feed.children).forEach(el => visibilityObserver.observe(el));
+
+            // Keep new elements observed via MutationObserver
+            new MutationObserver(muts => {
+                muts.forEach(m => {
+                    m.addedNodes.forEach(n => { if (n.nodeType === 1) visibilityObserver.observe(n); });
+                    m.removedNodes.forEach(n => { if (n.nodeType === 1) visibilityObserver.unobserve(n); });
+                });
+            }).observe(feed, { childList: true });
+
+            // Initial hydration
+            hydrate(0);
 
             // Video count badge
             const countBadge = document.createElement('div');
@@ -489,9 +515,8 @@ const UI = {
             container.appendChild(countBadge);
 
             container.appendChild(feed);
-            // Reapply visual editor filters + prefetch first 40 items
             VisualEditor.reapply();
-            UI._prefetchMedia(videos, 0, 40);
+            UI._prefetchMedia(videos, 0, 20);
 
         } catch (error) {
             console.error(error);

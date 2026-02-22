@@ -218,6 +218,34 @@
     opacity: 1;
 }
 
+/* Ghost Trail strength slider row */
+.delay-strength-row {
+    color: rgba(255, 255, 255, 0.85);
+    user-select: none;
+}
+
+.delay-strength-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.25);
+    outline: none;
+    cursor: pointer;
+    accent-color: var(--primary-color, #ff4081);
+    min-width: 60px;
+}
+
+.delay-strength-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--primary-color, #ff4081);
+    cursor: pointer;
+    box-shadow: 0 0 4px rgba(0, 0, 0, 0.5);
+}
+
 /* Player Loading Overlay */
 .player-loading-overlay {
     position: absolute;
@@ -788,6 +816,7 @@
     scroll-snap-type: y mandatory;
     scrollbar-width: none;
     -webkit-overflow-scrolling: touch;
+    will-change: scroll-position;
     /* Firefox */
 }
 
@@ -798,6 +827,9 @@
 
 .video-card-feed {
     height: 100vh;
+    /* GPU acceleration — prevents repaints on scroll */
+    will-change: transform;
+    contain: layout style paint;
     width: 100%;
     scroll-snap-align: start;
     position: relative;
@@ -805,6 +837,12 @@
     display: flex;
     justify-content: center;
     align-items: center;
+}
+
+/* Virtual scroll placeholder — reserves scroll height, no player cost */
+.video-card-placeholder {
+    background: #000;
+    cursor: default;
 }
 
 .feed-player-container {
