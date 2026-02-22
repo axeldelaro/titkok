@@ -938,6 +938,8 @@ const UI = {
                 img.src = Gallery.getImageURL(image);
                 img.alt = image.filename || 'Image';
                 img.draggable = false;
+                img.loading = 'lazy';
+                img.decoding = 'async';
 
                 const meta = image.mediaMetadata || {};
                 const w = parseInt(meta.width) || 0;
@@ -1123,6 +1125,8 @@ const UI = {
             img.src = Gallery.getImageURL(image);
             img.alt = image.filename || 'Image';
             img.draggable = false;
+            img.loading = 'lazy';
+            img.decoding = 'async';
 
             // Detect portrait from metadata
             const meta = image.mediaMetadata || {};
