@@ -1,4 +1,4 @@
-// Player — 3 filtres : Lèvres / Inversion / Ghost Trail
+// Player — Motion Trail always active, 3 optional CSS filters
 export default class Player {
     constructor(container, videoUrl, posterUrl, options = {}) {
         this.container = container;
@@ -12,48 +12,48 @@ export default class Player {
         this.lazy = options.lazy === true;
         this.isBlob = this.videoUrl && this.videoUrl.startsWith('blob:');
         this.mediaItemId = options.mediaItemId || null;
-
         this._retryCount = 0;
         this._maxRetries = 3;
 
-        // ── 3 filtres seulement ──────────────────────────────────────
+        // ── CSS Filters (applied to canvas display) ──────────────────
         this._filters = [
             { name: 'Normal', css: 'none' },
             { name: 'Lèvres', css: 'saturate(3) hue-rotate(-20deg) contrast(1.1)' },
             { name: 'Inversion', css: 'invert(1) hue-rotate(180deg)' },
-            { name: 'Ghost Trail', css: 'none', delay: true },
         ];
-
         this._filterIndex = parseInt(localStorage.getItem('playerFilterIndex') || '0', 10);
         if (this._filterIndex >= this._filters.length) this._filterIndex = 0;
 
-        // Ghost Trail strength  0 = longue traînée / 1 = traînée courte
-        this._delayStrength = Math.max(0, Math.min(1,
-            parseFloat(localStorage.getItem('playerDelayStrength') ?? '0.3')
+        // ── Motion Trail strength ─────────────────────────────────────
+        // Stored as 0.0 (short) → 1.0 (very long)
+        this._trailStrength = Math.max(0, Math.min(1,
+            parseFloat(localStorage.getItem('trailStrength') ?? '0.5')
         ));
 
-        this._cinemaMode = false;
+        // ── Zoom / Cinema ─────────────────────────────────────────────
         this._zoomLevel = 1;
         this._panX = 0;
         this._panY = 0;
 
-        // RAF delay state
-        this._rafId = null;
-        this._delayCanvas = null;
-        this._delayRunning = false;
+        // ── Trail state ───────────────────────────────────────────────
+        this._trailCanvas = null;
+        this._trailCtx = null;
+        this._trailRunning = false;
+        this._trailRaf = null;
+        this._trailCW = 0;
+        this._trailCH = 0;
 
         this.init();
     }
 
-    // ─────────────────────────────────────────────────────────────────────
+    // ─── Build DOM ────────────────────────────────────────────────────
     init() {
         this.container.innerHTML = '';
         this.container.className = 'player-wrapper';
 
-        // Video
+        // Video element (will be hidden once trail canvas is ready)
         this.video = document.createElement('video');
         this.video.poster = this.isBlob ? '' : `${this.posterUrl}=w1920-h1080`;
-        this.video.style.cssText = 'width:100%;height:100%;object-fit:contain;background:#000;touch-action:pan-y;transition:filter 0.3s,transform 0.2s;';
         this.video.muted = true;
         this.video.playsInline = true;
         this.video.controls = false;
@@ -61,6 +61,23 @@ export default class Player {
         this.video.setAttribute('playsinline', '');
         this.video.setAttribute('webkit-playsinline', '');
         this.video.setAttribute('muted', '');
+        this.video.style.cssText = [
+            'position:absolute', 'inset:0',
+            'width:100%', 'height:100%',
+            'object-fit:contain', 'background:#000',
+            'touch-action:pan-y',
+        ].join(';');
+
+        // Trail canvas — sits on top of the video, always visible
+        this._trailCanvas = document.createElement('canvas');
+        this._trailCanvas.style.cssText = [
+            'position:absolute', 'inset:0',
+            'width:100%', 'height:100%',
+            'pointer-events:none',
+            'z-index:2',
+            'display:block',
+        ].join(';');
+        this._trailCtx = this._trailCanvas.getContext('2d', { alpha: false });
 
         // Loading overlay
         this.loadingOverlay = document.createElement('div');
@@ -75,9 +92,7 @@ export default class Player {
             <p style="margin:0.5rem 0">Video could not be loaded</p>
             <button class="player-retry-btn">🔄 Retry</button>`;
         this.errorOverlay.querySelector('.player-retry-btn').onclick = () => {
-            this._retryCount = 0;
-            this.hideError();
-            this._retryPlayback();
+            this._retryCount = 0; this.hideError(); this._retryPlayback();
         };
 
         // Controls
@@ -90,68 +105,63 @@ export default class Player {
                     <div class="progress-fill"></div>
                 </div>
             </div>
-            <div class="delay-strength-row" style="display:none;align-items:center;gap:0.5rem;padding:0 0.25rem 0.25rem">
-                <span style="font-size:0.75rem;white-space:nowrap;opacity:0.8">👻 Trail</span>
-                <input type="range" min="0" max="1" step="0.01" class="delay-strength-slider" style="flex:1;accent-color:var(--primary-color,#ff4081);">
-                <span class="delay-strength-label" style="font-size:0.75rem;min-width:2.5em;text-align:right;opacity:0.8"></span>
+            <div class="trail-row" style="display:flex;align-items:center;gap:0.5rem;padding:0 0.25rem 0.25rem">
+                <span style="font-size:0.75rem;white-space:nowrap;opacity:0.8">👻 Traînée</span>
+                <input type="range" min="0" max="1" step="0.01" class="trail-slider" style="flex:1;accent-color:var(--primary-color,#ff4081);">
+                <span class="trail-label" style="font-size:0.75rem;min-width:2.5em;text-align:right;opacity:0.8"></span>
             </div>
             <div class="controls-row">
-                <button class="play-btn"          title="Play (Space)">▶</button>
+                <button class="play-btn"            title="Play (Space)">▶</button>
                 <div class="volume-container">
-                    <button class="mute-btn"      title="Mute (M)">🔇</button>
+                    <button class="mute-btn"        title="Mute (M)">🔇</button>
                     <input type="range" min="0" max="1" step="0.05" value="0" class="volume-slider">
                 </div>
-                <span class="time-display">00:00 / 00:00</span>
+                <span class="time-display">0:00 / 0:00</span>
                 <div style="flex:1"></div>
-                <button class="loop-btn   ctrl-btn" title="Loop (L)">🔁</button>
-                <button class="filter-btn ctrl-btn" title="Filtre (V)">🎨</button>
-                <button class="cinema-btn ctrl-btn" title="Cinema (C)">🎬</button>
-                <button class="zoom-btn   ctrl-btn" title="Zoom (Z)">🔍</button>
+                <button class="loop-btn    ctrl-btn" title="Loop (L)">🔁</button>
+                <button class="filter-btn  ctrl-btn" title="Filtre (V)">🎨</button>
+                <button class="cinema-btn  ctrl-btn" title="Cinema (C)">🎬</button>
+                <button class="zoom-btn    ctrl-btn" title="Zoom (Z)">🔍</button>
                 <button class="download-btn ctrl-btn" title="Download (D)">⬇️</button>
-                <button class="speed-btn"             title="Vitesse">1x</button>
+                <button class="speed-btn"             title="Vitesse">1×</button>
                 <button class="pip-btn"               title="PiP">🖼</button>
                 <button class="fullscreen-btn"        title="Fullscreen (F)">⛶</button>
             </div>`;
 
+        // Build: video → trail canvas → overlays → controls
         this.container.appendChild(this.video);
+        this.container.appendChild(this._trailCanvas);
         this.container.appendChild(this.loadingOverlay);
         this.container.appendChild(this.errorOverlay);
         this.container.appendChild(this.controls);
         this.container.style.touchAction = 'pan-y';
 
-        // ── Video events (guard against multi-fire) ──────────────────
-        let _readyFired = false;
+        // ── Video events ───────────────────────────────────────────────
+        let _firstPlay = false;
         const onReady = () => {
-            this._retryCount = 0;
             this.hideLoading();
             if (this._loadingTimeout) { clearTimeout(this._loadingTimeout); this._loadingTimeout = null; }
+            this._retryCount = 0;
             this._restoreProgress();
 
-            const timeDisplay = this.controls.querySelector('.time-display');
-            if (timeDisplay && this.video.duration && !isNaN(this.video.duration)) {
-                timeDisplay.textContent = `${this.formatTime(0)} / ${this.formatTime(this.video.duration)}`;
+            const td = this.controls.querySelector('.time-display');
+            if (td && this.video.duration && !isNaN(this.video.duration)) {
+                td.textContent = `${this.formatTime(0)} / ${this.formatTime(this.video.duration)}`;
             }
-
             // Auto-unmute
             if (this.video.muted) {
                 try {
-                    this.video.muted = false;
-                    this.video.volume = 0.5;
+                    this.video.muted = false; this.video.volume = 0.5;
                     const mb = this.controls.querySelector('.mute-btn');
                     const vs = this.controls.querySelector('.volume-slider');
-                    if (mb) mb.textContent = '🔉';
-                    if (vs) vs.value = 0.5;
+                    if (mb) mb.textContent = '🔉'; if (vs) vs.value = 0.5;
                 } catch (e) { }
             }
-
-            // Apply filter only once per playback start
-            if (!_readyFired) {
-                _readyFired = true;
-                this._applyCurrentFilter();
-            }
+            // Start trail on first ready-event per source
+            if (!_firstPlay) { _firstPlay = true; this._startTrail(); }
         };
-        // Reset flag each time a new src is loaded
-        this.video.addEventListener('emptied', () => { _readyFired = false; });
+
+        this.video.addEventListener('emptied', () => { _firstPlay = false; });
         this.video.addEventListener('canplay', onReady);
         this.video.addEventListener('loadeddata', onReady);
         this.video.addEventListener('loadedmetadata', onReady);
@@ -161,17 +171,14 @@ export default class Player {
             if (this._retryCount < this._maxRetries) {
                 this._retryCount++;
                 setTimeout(() => this._retryPlayback(), this._retryCount * 2000);
-            } else {
-                this.hideLoading();
-                this.showError();
-            }
+            } else { this.hideLoading(); this.showError(); }
         });
 
         this.attachEvents();
         if (!this.lazy) this.startPlayback();
     }
 
-    // ── Overlays ─────────────────────────────────────────────────────
+    // ── Overlays ──────────────────────────────────────────────────────
     showLoading() { this.loadingOverlay.classList.remove('player-overlay-hidden'); }
     hideLoading() { this.loadingOverlay.classList.add('player-overlay-hidden'); }
     showError() { this.errorOverlay.classList.remove('player-overlay-hidden'); }
@@ -183,43 +190,31 @@ export default class Player {
         const prog = JSON.parse(localStorage.getItem('videoProgress') || '{}');
         prog[this.mediaItemId] = { time: this.video.currentTime, duration: this.video.duration, updatedAt: Date.now() };
         const keys = Object.keys(prog);
-        if (keys.length > 200) {
-            keys.sort((a, b) => prog[a].updatedAt - prog[b].updatedAt)
-                .slice(0, keys.length - 200).forEach(k => delete prog[k]);
-        }
+        if (keys.length > 200) keys.sort((a, b) => prog[a].updatedAt - prog[b].updatedAt).slice(0, keys.length - 200).forEach(k => delete prog[k]);
         localStorage.setItem('videoProgress', JSON.stringify(prog));
     }
 
     _restoreProgress() {
         if (!this.mediaItemId) return;
-        const saved = JSON.parse(localStorage.getItem('videoProgress') || '{}')?.[this.mediaItemId];
-        if (saved && saved.time > 2 && saved.time < (saved.duration - 2)) {
-            this.video.currentTime = saved.time;
-        }
+        const s = JSON.parse(localStorage.getItem('videoProgress') || '{}')?.[this.mediaItemId];
+        if (s?.time > 2 && s.time < (s.duration - 2)) this.video.currentTime = s.time;
     }
 
     // ── Retry ─────────────────────────────────────────────────────────
     async _retryPlayback() {
         this.showLoading(); this.hideError();
-        if (this.isBlob) {
-            this.video.src = this.videoUrl; this.video.load(); this.video.play().catch(() => { }); return;
-        }
+        if (this.isBlob) { this.video.src = this.videoUrl; this.video.load(); this.video.play().catch(() => { }); return; }
         if (this.mediaItemId) {
             try {
                 const { default: API } = await import('./api.js');
                 const fresh = await API.getVideo(this.mediaItemId);
-                if (fresh?.baseUrl) {
-                    this.videoUrl = fresh.baseUrl;
-                    this.video.src = `${fresh.baseUrl}=dv`;
-                    this.video.load(); this.video.play().catch(() => { }); return;
-                }
+                if (fresh?.baseUrl) { this.videoUrl = fresh.baseUrl; this.video.src = `${fresh.baseUrl}=dv`; this.video.load(); this.video.play().catch(() => { }); return; }
             } catch (e) { }
         }
-        this.video.src = `${this.videoUrl}=dv&_t=${Date.now()}`;
-        this.video.load(); this.video.play().catch(() => { });
+        this.video.src = `${this.videoUrl}=dv&_t=${Date.now()}`; this.video.load(); this.video.play().catch(() => { });
     }
 
-    // ── Playback lifecycle ────────────────────────────────────────────
+    // ── Playback lifecycle ─────────────────────────────────────────────
     startPlayback() {
         this._started = true;
         this.showLoading();
@@ -232,20 +227,11 @@ export default class Player {
     }
 
     activate() {
-        if (this._started) {
-            this.video.play().catch(() => { });
-        } else if (this._preloaded) {
-            this._started = true;
-            this.hideLoading();
-            this.video.play().catch(() => { });
-        } else {
-            this.startPlayback();
-        }
-        // Resume / start Ghost Trail loop if active
-        if (this._filters[this._filterIndex]?.delay) {
-            if (!this._delayCanvas) this._setupDelayCanvas(); // create canvas if missing
-            if (!this._delayRunning) this._startDelayLoop();
-        }
+        if (this._started) { this.video.play().catch(() => { }); }
+        else if (this._preloaded) { this._started = true; this.hideLoading(); this.video.play().catch(() => { }); }
+        else { this.startPlayback(); }
+        // Restart trail loop (it was paused on deactivate)
+        if (!this._trailRunning) this._startTrail();
     }
 
     preload() {
@@ -261,7 +247,86 @@ export default class Player {
     deactivate() {
         this._saveProgress();
         this.video.pause();
-        this._stopDelayLoop(/* keep canvas */ true);
+        this._stopTrail(/* keepCanvas */ true); // keep the last frame frozen on canvas
+    }
+
+    // ─── MOTION TRAIL ─────────────────────────────────────────────────
+    // Algorithm each frame:
+    //   1. Fade canvas toward black  → dims old positions (creates trail)
+    //   2. Draw current video frame at full opacity → current pos crisp
+    //
+    // Strength 0 (left) → short trail   (fadeRate = 0.5)
+    // Strength 1 (right) → long trail   (fadeRate = 0.01)
+    // ─────────────────────────────────────────────────────────────────
+
+    _trailFadeRate() {
+        // Invert: slider right = longer trail = slower fade
+        return 0.01 + (1 - this._trailStrength) * 0.49; // 0.01 … 0.50
+    }
+
+    _startTrail() {
+        this._stopTrail(true); // stop previous loop but keep canvas
+        this._trailCW = 0;
+        this._trailCH = 0;
+        this._trailRunning = true;
+
+        // Hide native video — trail canvas takes over visually
+        this.video.style.opacity = '0';
+        this.video.style.position = 'absolute';
+
+        const canvas = this._trailCanvas;
+        const ctx = this._trailCtx;
+
+        // Apply current CSS filter to the canvas element (cross-browser)
+        const cssFilter = this._filters[this._filterIndex].css;
+        canvas.style.filter = cssFilter === 'none' ? '' : cssFilter;
+
+        const tick = () => {
+            if (!this._trailRunning) return;
+            this._trailRaf = requestAnimationFrame(tick);
+
+            // If paused or not ready: keep loop alive but don't draw
+            // (so canvas shows the last frozen trail when paused)
+            if (this.video.paused || this.video.readyState < 2) return;
+
+            const vw = this.video.videoWidth;
+            const vh = this.video.videoHeight;
+            if (!vw || !vh) return;
+
+            // Resize canvas on dimension change, init to black
+            if (this._trailCW !== vw || this._trailCH !== vh) {
+                this._trailCW = vw; this._trailCH = vh;
+                canvas.width = vw; canvas.height = vh;
+                ctx.fillStyle = '#000';
+                ctx.fillRect(0, 0, vw, vh);
+            }
+
+            const fadeRate = this._trailFadeRate();
+
+            // 1. Fade toward black (dims old positions → motion trail)
+            ctx.globalAlpha = fadeRate;
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, vw, vh);
+
+            // 2. Draw current video frame at FULL opacity
+            //    → current positions always crisp, only MOVED areas trail
+            ctx.globalAlpha = 1.0;
+            ctx.drawImage(this.video, 0, 0, vw, vh);
+        };
+
+        this._trailRaf = requestAnimationFrame(tick);
+    }
+
+    _stopTrail(keepCanvas = false) {
+        this._trailRunning = false;
+        if (this._trailRaf) { cancelAnimationFrame(this._trailRaf); this._trailRaf = null; }
+        if (!keepCanvas) {
+            // Reset canvas and restore video visibility
+            if (this._trailCtx && this._trailCW && this._trailCH) {
+                this._trailCtx.clearRect(0, 0, this._trailCW, this._trailCH);
+            }
+            this.video.style.opacity = '1';
+        }
     }
 
     // ── Events ────────────────────────────────────────────────────────
@@ -281,16 +346,12 @@ export default class Player {
         const progressFill = this.controls.querySelector('.progress-fill');
         const progressBuffered = this.controls.querySelector('.progress-buffered');
         const timeDisplay = this.controls.querySelector('.time-display');
-        const delayRow = this.controls.querySelector('.delay-strength-row');
-        const delaySlider = this.controls.querySelector('.delay-strength-slider');
-        const delayLabel = this.controls.querySelector('.delay-strength-label');
+        const trailSlider = this.controls.querySelector('.trail-slider');
+        const trailLabel = this.controls.querySelector('.trail-label');
 
-        // Init slider
-        delaySlider.value = this._delayStrength;
-        delayLabel.textContent = `${Math.round(this._delayStrength * 100)}%`;
-
-        // Show slider if Ghost Trail already selected
-        if (this._filters[this._filterIndex]?.delay) delayRow.style.display = 'flex';
+        // Init trail slider display
+        trailSlider.value = this._trailStrength;
+        trailLabel.textContent = `${Math.round(this._trailStrength * 100)}%`;
 
         // ── Play / Pause ──────────────────────────────────────────────
         const togglePlay = () => {
@@ -308,9 +369,9 @@ export default class Player {
             volumeSlider.value = this.video.muted ? 0 : this.video.volume;
         };
         volumeSlider.oninput = (e) => {
-            const vol = parseFloat(e.target.value);
-            this.video.volume = vol; this.video.muted = vol === 0;
-            muteBtn.textContent = vol === 0 ? '🔇' : (vol > 0.5 ? '🔊' : '🔉');
+            const v = parseFloat(e.target.value);
+            this.video.volume = v; this.video.muted = v === 0;
+            muteBtn.textContent = v === 0 ? '🔇' : (v > 0.5 ? '🔊' : '🔉');
         };
 
         // ── Time update ───────────────────────────────────────────────
@@ -323,30 +384,43 @@ export default class Player {
             if (!this.video.paused && playBtn.textContent !== '⏸') { playBtn.textContent = '⏸'; this.isPlaying = true; }
             if (++saveCounter % 25 === 0) this._saveProgress();
         };
-
-        // ── Buffer ────────────────────────────────────────────────────
         this.video.onprogress = () => {
             if (this.video.buffered.length > 0 && this.video.duration) {
                 const end = this.video.buffered.end(this.video.buffered.length - 1);
                 progressBuffered.style.width = `${(end / this.video.duration) * 100}%`;
             }
         };
-
-        // ── Ended ─────────────────────────────────────────────────────
         this.video.onended = () => {
             playBtn.textContent = '▶'; this.isPlaying = false; this._saveProgress();
             this.container.dispatchEvent(new CustomEvent('videoEnded', { bubbles: true }));
         };
 
         // ── Seek (mouse + touch) ──────────────────────────────────────
-        const seekTo = (clientX) => {
+        const seekTo = (x) => {
             if (!this.video.duration) return;
-            const rect = progressContainer.getBoundingClientRect();
-            this.video.currentTime = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width)) * this.video.duration;
+            const r = progressContainer.getBoundingClientRect();
+            this.video.currentTime = Math.max(0, Math.min(1, (x - r.left) / r.width)) * this.video.duration;
         };
         progressContainer.addEventListener('click', (e) => seekTo(e.clientX));
         progressContainer.addEventListener('touchstart', (e) => { e.preventDefault(); seekTo(e.touches[0].clientX); }, { passive: false });
         progressContainer.addEventListener('touchmove', (e) => { e.preventDefault(); seekTo(e.touches[0].clientX); }, { passive: false });
+
+        // ── Trail slider ──────────────────────────────────────────────
+        trailSlider.oninput = (e) => {
+            this._trailStrength = parseFloat(e.target.value);
+            localStorage.setItem('trailStrength', this._trailStrength);
+            trailLabel.textContent = `${Math.round(this._trailStrength * 100)}%`;
+            // No loop restart needed — _trailFadeRate() reads live on next tick
+        };
+
+        // ── Filter ────────────────────────────────────────────────────
+        filterBtn.onclick = () => {
+            this._filterIndex = (this._filterIndex + 1) % this._filters.length;
+            localStorage.setItem('playerFilterIndex', this._filterIndex);
+            const cssFilter = this._filters[this._filterIndex].css;
+            this._trailCanvas.style.filter = cssFilter === 'none' ? '' : cssFilter;
+            filterBtn.title = `Filtre: ${this._filters[this._filterIndex].name}`;
+        };
 
         // ── Fullscreen ────────────────────────────────────────────────
         fullscreenBtn.onclick = () => {
@@ -366,43 +440,19 @@ export default class Player {
         loopBtn.style.opacity = this.video.loop ? '1' : '0.5';
         loopBtn.onclick = () => { this.video.loop = !this.video.loop; loopBtn.style.opacity = this.video.loop ? '1' : '0.5'; };
 
-        // ── Filter ────────────────────────────────────────────────────
-        filterBtn.onclick = () => {
-            this._filterIndex = (this._filterIndex + 1) % this._filters.length;
-            localStorage.setItem('playerFilterIndex', this._filterIndex);
-            this._applyCurrentFilter();
-            const isDelay = !!this._filters[this._filterIndex]?.delay;
-            delayRow.style.display = isDelay ? 'flex' : 'none';
-        };
-
-        // ── Ghost Trail slider ────────────────────────────────────────
-        delaySlider.oninput = (e) => {
-            this._delayStrength = parseFloat(e.target.value);
-            localStorage.setItem('playerDelayStrength', this._delayStrength);
-            delayLabel.textContent = `${Math.round(this._delayStrength * 100)}%`;
-            // Update fade rate live — loop reads this on next tick
-            this._delayFadeRate = this._strengthToFadeRate(this._delayStrength);
-        };
-
         // ── Cinema ────────────────────────────────────────────────────
         cinemaBtn.onclick = () => {
-            this._cinemaMode = !this._cinemaMode;
             let overlay = document.getElementById('cinema-overlay');
-            if (this._cinemaMode) {
-                if (!overlay) {
-                    overlay = document.createElement('div');
-                    overlay.id = 'cinema-overlay';
-                    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:999;transition:opacity 0.4s;opacity:0;pointer-events:none;';
-                    document.body.appendChild(overlay);
-                    requestAnimationFrame(() => overlay.style.opacity = '1');
-                }
-                this.container.style.position = 'relative';
-                this.container.style.zIndex = '1000';
-                cinemaBtn.style.color = '#ffd700';
+            if (!overlay) {
+                overlay = document.createElement('div');
+                overlay.id = 'cinema-overlay';
+                overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:999;transition:opacity 0.4s;opacity:0;pointer-events:none;';
+                document.body.appendChild(overlay);
+                requestAnimationFrame(() => overlay.style.opacity = '1');
+                this.container.style.zIndex = '1000'; cinemaBtn.style.color = '#ffd700';
             } else {
-                if (overlay) { overlay.style.opacity = '0'; setTimeout(() => overlay.remove(), 400); }
-                this.container.style.zIndex = '';
-                cinemaBtn.style.color = '';
+                overlay.style.opacity = '0'; setTimeout(() => overlay.remove(), 400);
+                this.container.style.zIndex = ''; cinemaBtn.style.color = '';
             }
         };
 
@@ -410,10 +460,8 @@ export default class Player {
         const zoomLevels = [1, 1.5, 2, 3]; let zoomIdx = 0;
         zoomBtn.onclick = () => {
             zoomIdx = (zoomIdx + 1) % zoomLevels.length;
-            this._zoomLevel = zoomLevels[zoomIdx];
-            this._panX = 0; this._panY = 0;
-            this._applyZoom();
-            zoomBtn.textContent = this._zoomLevel > 1 ? `🔍${this._zoomLevel}x` : '🔍';
+            this._zoomLevel = zoomLevels[zoomIdx]; this._panX = 0; this._panY = 0;
+            this._applyZoom(); zoomBtn.textContent = this._zoomLevel > 1 ? `🔍${this._zoomLevel}×` : '🔍';
         };
         this.container.addEventListener('wheel', (e) => {
             if (!e.ctrlKey) return; e.preventDefault();
@@ -421,14 +469,10 @@ export default class Player {
             if (this._zoomLevel <= 1) { this._panX = 0; this._panY = 0; }
             this._applyZoom();
         }, { passive: false });
-        let isDragging = false, dStartX, dStartY, pStartX, pStartY;
-        this.video.addEventListener('mousedown', (e) => {
-            if (this._zoomLevel > 1) { isDragging = true; dStartX = e.clientX; dStartY = e.clientY; pStartX = this._panX; pStartY = this._panY; e.preventDefault(); }
-        });
-        document.addEventListener('mousemove', (e) => {
-            if (isDragging && this._zoomLevel > 1) { this._panX = pStartX + (e.clientX - dStartX); this._panY = pStartY + (e.clientY - dStartY); this._applyZoom(); }
-        });
-        document.addEventListener('mouseup', () => { isDragging = false; });
+        let drag = false, dsx, dsy, psx, psy;
+        this.video.addEventListener('mousedown', (e) => { if (this._zoomLevel > 1) { drag = true; dsx = e.clientX; dsy = e.clientY; psx = this._panX; psy = this._panY; e.preventDefault(); } });
+        document.addEventListener('mousemove', (e) => { if (drag && this._zoomLevel > 1) { this._panX = psx + (e.clientX - dsx); this._panY = psy + (e.clientY - dsy); this._applyZoom(); } });
+        document.addEventListener('mouseup', () => { drag = false; });
 
         // ── Download ──────────────────────────────────────────────────
         downloadBtn.onclick = () => {
@@ -439,11 +483,7 @@ export default class Player {
 
         // ── Speed ─────────────────────────────────────────────────────
         const speeds = [0.5, 0.75, 1, 1.25, 1.5, 2]; let speedIdx = 2;
-        speedBtn.onclick = () => {
-            speedIdx = (speedIdx + 1) % speeds.length;
-            this.video.playbackRate = speeds[speedIdx];
-            speedBtn.textContent = `${speeds[speedIdx]}x`;
-        };
+        speedBtn.onclick = () => { speedIdx = (speedIdx + 1) % speeds.length; this.video.playbackRate = speeds[speedIdx]; speedBtn.textContent = `${speeds[speedIdx]}×`; };
 
         // ── Keyboard ──────────────────────────────────────────────────
         this._keyHandler = (e) => {
@@ -457,8 +497,6 @@ export default class Player {
                 case 'c': e.preventDefault(); cinemaBtn.click(); break;
                 case 'z': e.preventDefault(); zoomBtn.click(); break;
                 case 'd': e.preventDefault(); downloadBtn.click(); break;
-                case 'j': e.preventDefault(); this.video.currentTime = Math.max(0, this.video.currentTime - 10); break;
-                case ';': e.preventDefault(); this.video.currentTime = Math.min(this.video.duration || 0, this.video.currentTime + 10); break;
                 case 'arrowleft': e.preventDefault(); this.video.currentTime = Math.max(0, this.video.currentTime - 5); break;
                 case 'arrowright': e.preventDefault(); this.video.currentTime = Math.min(this.video.duration || 0, this.video.currentTime + 5); break;
                 case 'arrowup': e.preventDefault(); this.video.volume = Math.min(1, this.video.volume + 0.1); volumeSlider.value = this.video.volume; break;
@@ -467,7 +505,7 @@ export default class Player {
         };
         document.addEventListener('keydown', this._keyHandler);
 
-        // ── Auto-hide controls ─────────────────────────────────────────
+        // Auto-hide controls
         this.container.onmousemove = () => {
             this.controls.style.opacity = '1';
             clearTimeout(this.hideControlsTimer);
@@ -476,164 +514,26 @@ export default class Player {
     }
 
     _applyZoom() {
-        this.video.style.transform = `scale(${this._zoomLevel}) translate(${this._panX / this._zoomLevel}px, ${this._panY / this._zoomLevel}px)`;
+        const t = `scale(${this._zoomLevel}) translate(${this._panX / this._zoomLevel}px, ${this._panY / this._zoomLevel}px)`;
+        this.video.style.transform = t;
+        if (this._trailCanvas) this._trailCanvas.style.transform = t;
     }
 
-    // ── Apply current filter ──────────────────────────────────────────
-    _applyCurrentFilter() {
-        const f = this._filters[this._filterIndex];
-        this.video.style.filter = f.css;
-        const btn = this.controls?.querySelector('.filter-btn');
-        if (btn) btn.title = `Filtre: ${f.name}`;
-
-        if (f.delay) {
-            // Start Ghost Trail (stops any existing loop first)
-            this._setupDelayCanvas();
-            this._startDelayLoop();
-        } else {
-            // Remove Ghost Trail
-            this._stopDelayLoop(false);
-            this._removeDelayCanvas();
-            this.video.style.opacity = '1';
-        }
+    formatTime(s) {
+        if (!s || isNaN(s)) return '0:00';
+        const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = Math.floor(s % 60);
+        if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
+        return `${m}:${sec.toString().padStart(2, '0')}`;
     }
 
-    // ─────────────────────────────────────────────────────────────────
-    // MOTION TRAIL — feedback loop with ping-pong canvas
-    //
-    // Algorithm each frame:
-    //   1. Fade the accumulator canvas toward black  (dims old positions)
-    //   2. Draw current video frame at FULL opacity   (current pos = crisp)
-    //   3. Copy result back to accumulator            (for next frame)
-    //
-    // Slider: RIGHT = longer trail, LEFT = shorter trail
-    //   strength=0 → fadeRate=0.5 (fast fade, short trail)
-    //   strength=1 → fadeRate=0.01 (slow fade, very long trail)
-    // ─────────────────────────────────────────────────────────────────
-
-    _strengthToFadeRate(strength) {
-        // Invert: right slider = more trail = slower fade
-        return 0.01 + (1 - strength) * 0.49; // 0.01 … 0.50
-    }
-
-    _setupDelayCanvas() {
-        this._removeDelayCanvas();
-
-        // Main (visible) canvas
-        const canvas = document.createElement('canvas');
-        canvas.className = 'delay-canvas';
-        canvas.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:2;display:block;';
-        this.container.insertBefore(canvas, this.controls);
-
-        // Offscreen accumulator (ping-pong partner)
-        const acc = document.createElement('canvas');
-
-        this._delayCanvas = canvas;
-        this._delayCtx = canvas.getContext('2d', { willReadFrequently: false, alpha: false });
-        this._accCanvas = acc;
-        this._accCtx = acc.getContext('2d', { willReadFrequently: false, alpha: false });
-        this._delayFadeRate = this._strengthToFadeRate(this._delayStrength);
-        this._delayCW = 0; this._delayCH = 0;
-
-        // Hide native video — canvas replaces it visually
-        this.video.style.opacity = '0';
-    }
-
-    _removeDelayCanvas() {
-        if (this._delayCanvas) {
-            if (this._delayCanvas.parentNode) this._delayCanvas.remove();
-            this._delayCanvas = null;
-            this._delayCtx = null;
-        }
-        this._accCanvas = null;
-        this._accCtx = null;
-    }
-
-    _startDelayLoop() {
-        if (this._delayRunning) return;
-        if (!this._delayCanvas) return;
-        this._delayRunning = true;
-
-        const loop = () => {
-            if (!this._delayRunning) return;
-            this._rafId = requestAnimationFrame(loop);
-
-            const ctx = this._delayCtx;
-            const aCtx = this._accCtx;
-            if (!ctx || !aCtx) return;
-
-            // Wait until video is playing and has dimensions
-            if (this.video.paused || this.video.readyState < 2) return;
-
-            const vw = this.video.videoWidth || 640;
-            const vh = this.video.videoHeight || 360;
-
-            // Resize both canvases on dimension change, fill black
-            if (this._delayCW !== vw || this._delayCH !== vh) {
-                this._delayCW = vw; this._delayCH = vh;
-                this._delayCanvas.width = vw; this._delayCanvas.height = vh;
-                this._accCanvas.width = vw; this._accCanvas.height = vh;
-                ctx.fillStyle = '#000'; ctx.fillRect(0, 0, vw, vh);
-                aCtx.fillStyle = '#000'; aCtx.fillRect(0, 0, vw, vh);
-            }
-
-            // Read current fade rate (updated live by slider)
-            const fadeRate = this._delayFadeRate; // 0.01=long trail … 0.50=short trail
-
-            // ── Step 1: Copy accumulator → main canvas, faded toward black ──
-            // Overwrite main canvas with black first
-            ctx.globalAlpha = 1;
-            ctx.fillStyle = '#000';
-            ctx.fillRect(0, 0, vw, vh);
-            // Draw accumulator at (1 - fadeRate) opacity → dim old content
-            ctx.globalAlpha = 1 - fadeRate;
-            ctx.drawImage(this._accCanvas, 0, 0);
-
-            // ── Step 2: Draw current video frame at FULL opacity ──
-            // Current positions are fully bright; old positions trail as they fade
-            ctx.globalAlpha = 1.0;
-            ctx.drawImage(this.video, 0, 0, vw, vh);
-
-            // ── Step 3: Copy result → accumulator for next frame ──
-            aCtx.globalAlpha = 1;
-            aCtx.drawImage(this._delayCanvas, 0, 0);
-        };
-
-        this._rafId = requestAnimationFrame(loop);
-    }
-
-    _stopDelayLoop(keepCanvas = false) {
-        this._delayRunning = false;
-        if (this._rafId) { cancelAnimationFrame(this._rafId); this._rafId = null; }
-        if (!keepCanvas) {
-            this._removeDelayCanvas();
-            if (this.video) this.video.style.opacity = '1';
-        }
-    }
-
-    // ── Format time ───────────────────────────────────────────────────
-    formatTime(seconds) {
-        if (!seconds || isNaN(seconds)) return '00:00';
-        const h = Math.floor(seconds / 3600);
-        const m = Math.floor((seconds % 3600) / 60);
-        const s = Math.floor(seconds % 60);
-        if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-        return `${m}:${s.toString().padStart(2, '0')}`;
-    }
-
-    // ── Destroy ───────────────────────────────────────────────────────
     destroy() {
         this._saveProgress();
-        this._stopDelayLoop(false);
+        this._stopTrail(false);
         const cin = document.getElementById('cinema-overlay');
         if (cin) cin.remove();
         if (this._keyHandler) document.removeEventListener('keydown', this._keyHandler);
         clearTimeout(this.hideControlsTimer);
         clearTimeout(this._loadingTimeout);
-        if (this.video) {
-            this.video.pause();
-            this.video.removeAttribute('src');
-            this.video.load();
-        }
+        if (this.video) { this.video.pause(); this.video.removeAttribute('src'); this.video.load(); }
     }
 }
