@@ -6,8 +6,8 @@ export default class Player {
         this.posterUrl = posterUrl;
         this.video = null;
 
-        // 8 delayed clones for a dense, fluid ghost trail
-        this.numClones = 8;
+        // 12 delayed clones for an extremely dense, fluid ghost trail
+        this.numClones = 12;
         this.trailVideos = [];
 
         this.controls = null;
@@ -340,22 +340,22 @@ export default class Player {
             return;
         }
 
-        // As strength increases, main video gets slightly transparent to let trail shine
-        this.video.style.opacity = (0.95 - (s * 0.15)).toString();
+        // As strength increases, main video becomes quite transparent (down to 0.6 at 100%)
+        // This is crucial so the bright clones behind it aren't hidden by the foreground
+        this.video.style.opacity = (0.95 - (s * 0.35)).toString();
 
-        // Calculate how many clones to show based on strength
-        // At 0.2, show 1 clone. At 1.0, show all 5.
         const activeClones = Math.max(1, Math.round(s * this.numClones));
 
-        // Base opacity for the clones (gets stronger with slider)
-        const baseOpacity = 0.2 + (s * 0.6);
+        // Base opacity for the clones is much higher now
+        const baseOpacity = 0.4 + (s * 0.55); // up to 0.95 opacity for the nearest clone
 
         for (let i = 0; i < this.numClones; i++) {
             const clone = this.trailVideos[i];
 
             if (i < activeClones) {
-                // Fade out the further back the clone is
-                const decay = 1 - (i * 0.15);
+                // Slower decay so the trail stays thick for longer.
+                // At 12 clones, i=11 means 11 * 0.07 = 0.77 drop (still ~20% visible at the very end)
+                const decay = 1 - (i * 0.07);
                 const finalOpacity = Math.max(0, baseOpacity * decay);
                 clone.style.opacity = finalOpacity.toString();
             } else {
@@ -368,10 +368,9 @@ export default class Player {
         if (this.video.readyState < 2) return;
 
         const s = this._trailStrength;
-        if (s === 0) return;
-
-        // Smaller gap since we have 8 clones now. Max gap ~0.04s per clone.
-        const gap = 0.02 + (s * 0.02);
+        // 12 clones: max gap is slightly smaller to keep them tightly linked
+        // gap range: 0.01s to 0.035s per clone (total trail length up to ~0.4s)
+        const gap = 0.01 + (s * 0.025);
         const isPaused = this.video.paused;
 
         for (let i = 0; i < this.numClones; i++) {
