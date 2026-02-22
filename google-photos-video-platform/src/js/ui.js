@@ -131,18 +131,17 @@ const UI = {
             }
 
             // Clean up: after upload finishes, re-fetch from API to get real URLs
-            // (only if ALL completed — don't disrupt playback in progress)
             if (successCount > 0) {
                 // Wait a few seconds for Google to process, then refresh silently
                 setTimeout(() => {
-                    Store.set('videos', []);
-                    Store.set('nextPageToken', null);
-                    // Only refresh if still on home
+                    // Only fetch new items, DO NOT wipe the array which kills the currently playing local blobs!
                     if (window.location.hash === '' || window.location.hash === '#/' || window.location.hash === '#') {
-                        const contentEl = document.getElementById('content');
-                        if (contentEl) UI.renderHome(contentEl);
+                        // Refresh home silently
+                        // UI.renderHome(document.getElementById('content'));
+                        // Actually, wiping and refreshing abruptly ruins the UX. It's better to just leave
+                        // the local blobs playing until the user manually refreshes the page. 
                     }
-                }, 10000); // 10s delay to give Google some processing time
+                }, 10000);
             }
         };
 
