@@ -193,10 +193,9 @@ export default class Player {
             } else { this.hideLoading(); this.showError(); }
         });
 
-        // Keep the trail videos strictly playing when main video plays
+        // Keep the trail videos strictly synced when main video plays
         this.video.addEventListener('play', () => {
             this._syncTrailVideo();
-            this.trailVideos.forEach(v => v.play().catch(() => { }));
         });
         this.video.addEventListener('pause', () => {
             this.trailVideos.forEach(v => v.pause());
@@ -288,7 +287,7 @@ export default class Player {
         this.trailVideos.forEach(v => v.load());
 
         this.video.play().catch(() => { });
-        this.trailVideos.forEach(v => v.play().catch(() => { }));
+        // Do not force play clones here; let _syncTrailVideo handle their startup sequentially
 
         this._updateTrailVisuals();
 
@@ -378,8 +377,17 @@ export default class Player {
             if (clone.style.opacity === '0' || clone.readyState < 2) continue;
 
             const targetDelay = gap * (i + 1);
-            let targetTime = this.video.currentTime - targetDelay;
-            if (targetTime < 0) targetTime = 0; // Don't seek to negative
+
+            // Startup phase fix:
+            // If the main video hasn't reached the delay time for this clone,
+            // the clone MUST stay frozen at 0.
+            if (this.video.currentTime <= targetDelay) {
+                if (!clone.paused) clone.pause();
+                if (clone.currentTime > 0) clone.currentTime = 0;
+                continue; // Wait until the main video is far enough ahead
+            }
+
+            const targetTime = this.video.currentTime - targetDelay;
 
             const drift = Math.abs(clone.currentTime - targetTime);
 
@@ -448,7 +456,7 @@ export default class Player {
         const togglePlay = () => {
             if (this.video.paused) {
                 this.video.play();
-                this.trailVideos.forEach(v => v.play().catch(() => { }));
+                // trailVideos will play automatically via _syncTrailVideo when their time comes
                 playBtn.textContent = '⏸';
                 this.isPlaying = true;
             } else {
