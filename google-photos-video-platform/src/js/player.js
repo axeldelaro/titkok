@@ -329,20 +329,10 @@ export default class Player {
             if (!this.video.duration) return;
             const r = progressContainer.getBoundingClientRect();
             this.video.currentTime = Math.max(0, Math.min(1, (x - r.left) / r.width)) * this.video.duration;
-            this._syncTrailVideo();
         };
         progressContainer.addEventListener('click', (e) => seekTo(e.clientX));
         progressContainer.addEventListener('touchstart', (e) => { e.preventDefault(); seekTo(e.touches[0].clientX); }, { passive: false });
         progressContainer.addEventListener('touchmove', (e) => { e.preventDefault(); seekTo(e.touches[0].clientX); }, { passive: false });
-
-        // ── Trail slider ──────────────────────────────────────────────
-        trailSlider.oninput = (e) => {
-            this._trailStrength = parseFloat(e.target.value);
-            localStorage.setItem('trailStrength', this._trailStrength);
-            trailLabel.textContent = `${Math.round(this._trailStrength * 100)}%`;
-            this._updateTrailVisuals();
-            this._syncTrailVideo(true); // Snap instantly when slider moves
-        };
 
         // ── Filter ────────────────────────────────────────────────────
         filterBtn.onclick = () => {

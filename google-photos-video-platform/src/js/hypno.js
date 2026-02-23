@@ -77,7 +77,6 @@ let config = JSON.parse(localStorage.getItem('hypnoConfig') || JSON.stringify(DE
 export const updateConfig = (newConfig) => {
     config = { ...config, ...newConfig };
     localStorage.setItem('hypnoConfig', JSON.stringify(config));
-    Toast.show('Hypno settings updated', 'info');
 };
 
 export const getConfig = () => config;
