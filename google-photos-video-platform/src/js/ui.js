@@ -16,6 +16,8 @@ import HypnoPopups, { getConfig, updateConfig } from './hypno.js';
 import VisualEditor from './visual-editor.js';
 import FaceEditor from './face-editor.js';
 import Cache from './cache.js';
+import MediaStats from './mediaStats.js';
+import { ALL_NAV_ITEMS, getVisibleItems, setVisibleItems } from '../components/sidebar.js';
 
 const UI = {
     init: () => {
@@ -366,11 +368,45 @@ const UI = {
                 const player = new Player(playerContainer, video.baseUrl, video.baseUrl, { lazy: true, mediaItemId: video.id });
                 card._player = player;
 
+                // Track view for stats
+                MediaStats.recordView(video.id);
+
                 if (!isPortrait && player.video) {
                     player.video.addEventListener('loadedmetadata', () => {
                         if (player.video.videoHeight > player.video.videoWidth) card.classList.add('portrait');
                     });
                 }
+
+                // Feature E: Long-press on video card = speed picker
+                let longPressTimer;
+                card.addEventListener('pointerdown', () => {
+                    longPressTimer = setTimeout(() => {
+                        const existing = document.querySelector('.feed-speed-popup');
+                        if (existing) { existing.remove(); return; }
+                        const popup = document.createElement('div');
+                        popup.className = 'feed-speed-popup';
+                        popup.innerHTML = '[0.5×, 0.75×, 1×, 1.25×, 1.5×, 2×]'
+                            .replace(/\[|\]/g, '')
+                            .split(', ')
+                            .map(s => `<button class="speed-opt${s === '1×' ? ' active' : ''}" data-rate="${parseFloat(s)}">${s}</button>`)
+                            .join('');
+                        card.appendChild(popup);
+                        popup.querySelectorAll('.speed-opt').forEach(btn => {
+                            btn.onclick = (e) => {
+                                e.stopPropagation();
+                                const rate = parseFloat(btn.dataset.rate);
+                                player.video.playbackRate = rate;
+                                player.trailVideos.forEach(v => v.playbackRate = rate);
+                                popup.querySelectorAll('.speed-opt').forEach(b => b.classList.remove('active'));
+                                btn.classList.add('active');
+                                setTimeout(() => popup.remove(), 600);
+                            };
+                        });
+                        setTimeout(() => popup.remove(), 4000);
+                    }, 600);
+                }, { passive: true });
+                card.addEventListener('pointerup', () => clearTimeout(longPressTimer), { passive: true });
+                card.addEventListener('pointercancel', () => clearTimeout(longPressTimer), { passive: true });
 
                 const infoOverlay = document.createElement('div');
                 infoOverlay.className = 'feed-info-overlay';
@@ -733,17 +769,12 @@ const UI = {
             videos = videos.filter(v => !hiddenIds.includes(v.id));
         }
 
-        // ── Merge and shuffle ──
-        const mixItems = [
+        // ── Merge and weighted-shuffle (H: unseen/rare items first) ──
+        const rawItems = [
             ...videos.map(v => ({ type: 'video', data: v })),
             ...images.map(img => ({ type: 'image', data: img }))
         ];
-
-        // Fisher-Yates shuffle
-        for (let i = mixItems.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [mixItems[i], mixItems[j]] = [mixItems[j], mixItems[i]];
-        }
+        const mixItems = MediaStats.weightedShuffle(rawItems, item => item.data.id);
 
         if (mixItems.length === 0) {
             container.className = 'content';
@@ -1233,60 +1264,81 @@ const UI = {
             }
         };
 
-        // ─── GRID VIEW ──────────────────────────────────────────────────────────
+        // ─── GRID VIEW (date-grouped) ───────────────────────────────────────────────────
         const renderGridView = () => {
-            const grid = document.createElement('div');
-            grid.className = 'photo-grid';
-            viewContainer.appendChild(grid);
+            const wrapper = document.createElement('div');
+            wrapper.style.cssText = 'width:100%;padding-bottom:8px;';
+            viewContainer.appendChild(wrapper);
 
-            // Preload visible image batch
+            // Preload first batch
             Cache.preloadImageURLs(images.slice(0, 24).map(img => Gallery.getImageURL(img, 540)));
 
+            // Group by month-year (features 14 + 15)
+            const groups = new Map();
             images.forEach((image, i) => {
-                const cell = document.createElement('div');
-                cell.className = 'photo-grid-cell';
-
-                const img = document.createElement('img');
-                const thumbUrl = Gallery.getImageURL(image, 540);
-                img.src = thumbUrl;
-                img.alt = image.filename || 'Photo';
-                img.loading = i < 12 ? 'eager' : 'lazy';
-                img.decoding = 'async';
-                img.draggable = false;
-                cell.appendChild(img);
-
-                // Edit button overlay
-                const overlay = document.createElement('div');
-                overlay.className = 'photo-grid-overlay';
-                overlay.innerHTML = `<button class="photo-grid-edit-btn" title="AI Retouch">🪄</button>`;
-                overlay.querySelector('.photo-grid-edit-btn').onclick = (e) => {
-                    e.stopPropagation();
-                    FaceEditor.open(image);
-                };
-                cell.appendChild(overlay);
-
-                // Click = open lightbox slideshow
-                cell.onclick = (e) => {
-                    if (e.target.closest('.photo-grid-edit-btn')) return;
-                    const items = images.map(img => ({ type: 'image', data: img }));
-                    UI._openSlideshow(items, container, i);
-                };
-
-                grid.appendChild(cell);
+                const d = image.mediaMetadata?.creationTime
+                    ? new Date(image.mediaMetadata.creationTime)
+                    : null;
+                const key = d
+                    ? d.toLocaleDateString(undefined, { year: 'numeric', month: 'long' })
+                    : 'Unknown date';
+                if (!groups.has(key)) groups.set(key, []);
+                groups.get(key).push({ image, i });
             });
 
-            // Intersection observer to cache-ahead on scroll through grid
-            const gridCacheObs = new IntersectionObserver((entries) => {
-                entries.forEach(entry => {
-                    if (!entry.isIntersecting) return;
-                    const cellIdx = Array.from(grid.children).indexOf(entry.target);
-                    if (cellIdx < 0) return;
-                    Cache.preloadImageURLs(
-                        images.slice(cellIdx, cellIdx + 12).map(img => Gallery.getImageURL(img, 1080))
-                    );
+            groups.forEach((group, monthLabel) => {
+                // Date separator header (feature 15)
+                const header = document.createElement('div');
+                header.className = 'photo-grid-date-header';
+                header.textContent = monthLabel;
+                wrapper.appendChild(header);
+
+                const grid = document.createElement('div');
+                grid.className = 'photo-grid';
+                wrapper.appendChild(grid);
+
+                group.forEach(({ image, i }) => {
+                    const cell = document.createElement('div');
+                    cell.className = 'photo-grid-cell';
+
+                    const img = document.createElement('img');
+                    img.src = Gallery.getImageURL(image, 540);
+                    img.alt = image.filename || 'Photo';
+                    img.loading = i < 12 ? 'eager' : 'lazy';
+                    img.decoding = 'async';
+                    img.draggable = false;
+                    cell.appendChild(img);
+
+                    const overlay = document.createElement('div');
+                    overlay.className = 'photo-grid-overlay';
+                    overlay.innerHTML = `<button class="photo-grid-edit-btn" title="AI Retouch">🪄</button>`;
+                    overlay.querySelector('.photo-grid-edit-btn').onclick = (e) => {
+                        e.stopPropagation();
+                        FaceEditor.open(image);
+                    };
+                    cell.appendChild(overlay);
+
+                    cell.onclick = (e) => {
+                        if (e.target.closest('.photo-grid-edit-btn')) return;
+                        const items = images.map(img => ({ type: 'image', data: img }));
+                        UI._openSlideshow(items, container, i);
+                    };
+
+                    grid.appendChild(cell);
                 });
-            }, { threshold: 0.1 });
-            Array.from(grid.children).forEach(el => gridCacheObs.observe(el));
+
+                // Cache-ahead observer per grid
+                const gridObs = new IntersectionObserver(entries => {
+                    entries.forEach(entry => {
+                        if (!entry.isIntersecting) return;
+                        const ci = Array.from(grid.children).indexOf(entry.target);
+                        if (ci >= 0) Cache.preloadImageURLs(
+                            images.slice(ci, ci + 12).map(img => Gallery.getImageURL(img, 1080))
+                        );
+                    });
+                }, { threshold: 0.1 });
+                Array.from(grid.children).forEach(el => gridObs.observe(el));
+            });
         };
 
         // ─── FEED VIEW (TikTok-style) ────────────────────────────────────────────
@@ -1416,6 +1468,30 @@ const UI = {
             Store.set('user', user);
 
             container.innerHTML = '';
+            const profileWrapper = document.createElement('div');
+
+            // ── Tab bar ──
+            const tabBar = document.createElement('div');
+            tabBar.className = 'profile-tabs';
+            tabBar.innerHTML = `
+                <button class="profile-tab active" data-tab="profile">👤 Profile</button>
+                <button class="profile-tab" data-tab="settings">⚙️ Settings</button>
+            `;
+            profileWrapper.appendChild(tabBar);
+
+            const tabContent = document.createElement('div');
+            tabContent.className = 'profile-tab-content';
+            profileWrapper.appendChild(tabContent);
+            container.appendChild(profileWrapper);
+
+            const showTab = (tab) => {
+                tabBar.querySelectorAll('.profile-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+                tabContent.innerHTML = '';
+                if (tab === 'profile') renderProfileTab();
+                else renderSettingsTab();
+            };
+            tabBar.querySelectorAll('.profile-tab').forEach(btn => btn.onclick = () => showTab(btn.dataset.tab));
+
             const profile = document.createElement('div');
             profile.className = 'profile-container';
 
@@ -1428,13 +1504,16 @@ const UI = {
                 gallery: galleryCount
             };
 
-            profile.innerHTML = `
+            const renderProfileTab = () => {
+
+                // ────── The existing profile HTML content as-was ──────
+                profile.innerHTML = `
                 <div class="profile-header">
                     <div class="profile-avatar">
                         ${user.picture
-                    ? `<img src="${user.picture}" alt="${user.name}" referrerpolicy="no-referrer">`
-                    : `<div class="profile-avatar-placeholder">${(user.name || 'U').charAt(0).toUpperCase()}</div>`
-                }
+                        ? `<img src="${user.picture}" alt="${user.name}" referrerpolicy="no-referrer">`
+                        : `<div class="profile-avatar-placeholder">${(user.name || 'U').charAt(0).toUpperCase()}</div>`
+                    }
                     </div>
                     <div class="profile-details">
                         <h1>${user.name || 'User'}</h1>
@@ -1472,134 +1551,196 @@ const UI = {
                 </div>
             `;
 
-            profile.querySelector('#profile-logout').onclick = () => Auth.logout();
+                profile.querySelector('#profile-logout').onclick = () => Auth.logout();
 
-            profile.querySelector('#profile-hypno-settings').onclick = () => {
-                const config = getConfig();
-                const container = document.createElement('div');
-                container.style.padding = '10px';
+                profile.querySelector('#profile-hypno-settings').onclick = () => {
+                    const config = getConfig();
+                    const container = document.createElement('div');
+                    container.style.padding = '10px';
 
-                // Effect definitions with icons, descriptions, and preview CSS — 46 effects in 5 categories
-                const effects = {
-                    'Visual / Chill 👁️': [
-                        { key: 'scanlines', icon: '📺', desc: 'CRT scanlines overlay', preview: 'background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.3) 2px,rgba(0,0,0,0.3) 4px);' },
-                        { key: 'rgbShift', icon: '🌈', desc: 'RGB color split', preview: 'box-shadow:2px 0 #f0f,-2px 0 #0ff;' },
-                        { key: 'pixelate', icon: '🟩', desc: 'Pixel mosaic effect', preview: 'image-rendering:pixelated;background-size:8px 8px;background-image:repeating-conic-gradient(#333 0% 25%,#555 0% 50%);' },
-                        { key: 'textSubliminal', icon: '👁️', desc: 'Flash hidden words', preview: '' },
-                        { key: 'breathe', icon: '🫁', desc: 'Breathing pulse', preview: 'animation:hypnoPreviewBreathe 2s ease-in-out infinite;' },
-                        { key: 'tilt', icon: '📐', desc: 'Subtle tilt shifts', preview: 'transform:rotate(3deg);' },
-                        { key: 'mirror', icon: '🪞', desc: 'Mirror flip axis', preview: 'transform:scaleX(-1);' },
-                        { key: 'colorCycle', icon: '🎡', desc: 'Hue rotation cycle', preview: 'animation:hypnoPreviewHue 2s linear infinite;' },
-                        { key: 'fadePulse', icon: '💫', desc: 'Opacity oscillation', preview: 'animation:hypnoFadePulse 1.5s ease-in-out infinite;' },
-                        { key: 'filmGrain', icon: '🎞️', desc: 'Film grain overlay', preview: 'background:repeating-conic-gradient(#333 0% 25%,#444 0% 50%);background-size:4px 4px;' },
-                        { key: 'sepiaFlash', icon: '📜', desc: 'Quick sepia flash', preview: 'filter:sepia(1);' }
-                    ],
-                    'Motion / Transform 🌊': [
-                        { key: 'doubleVision', icon: '👓', desc: 'Double vision ghost', preview: 'box-shadow:3px 3px 0 rgba(255,100,100,0.5),-3px -3px 0 rgba(100,100,255,0.5);' },
-                        { key: 'verticalStretch', icon: '↕️', desc: 'Screen stretch warp', preview: 'transform:scaleY(1.3);' },
-                        { key: 'glitch', icon: '⚡', desc: 'Screen glitch bursts', preview: 'animation:hypnoPreviewGlitch 0.3s infinite;' },
-                        { key: 'zoomPulse', icon: '🔍', desc: 'Zoom in/out pulse', preview: 'animation:hypnoPreviewBreathe 1s ease-in-out infinite;' },
-                        { key: 'skewHorizontal', icon: '↗️', desc: 'Horizontal skew', preview: 'transform:skewX(8deg);' },
-                        { key: 'skewVertical', icon: '↘️', desc: 'Vertical skew', preview: 'transform:skewY(5deg);' },
-                        { key: 'wobble', icon: '〰️', desc: 'Sine-wave wobble', preview: 'animation:hypnoPreviewGlitch 0.5s ease-in-out infinite;' },
-                        { key: 'heartbeat', icon: '💓', desc: 'Heartbeat pulse', preview: 'animation:hypnoPreviewBreathe 0.6s ease-in-out infinite;' },
-                        { key: 'earthquake', icon: '🌋', desc: 'Heavy screen shake', preview: 'animation:hypnoPreviewGlitch 0.1s linear infinite;' },
-                        { key: 'drunkMode', icon: '🍺', desc: 'Dizzy blur + sway', preview: 'filter:blur(1px);transform:rotate(2deg) skewX(3deg);' }
-                    ],
-                    'Color / Filter 🎨': [
-                        { key: 'negativeFlash', icon: '🔳', desc: 'Brief color invert', preview: 'filter:invert(1);' },
-                        { key: 'thermalVision', icon: '🌡️', desc: 'Thermal camera look', preview: 'filter:hue-rotate(180deg) contrast(2) saturate(3);' },
-                        { key: 'nightVision', icon: '🌙', desc: 'Green night vision', preview: 'filter:sepia(1) hue-rotate(80deg) saturate(4) brightness(1.5);' },
-                        { key: 'redChannel', icon: '🟥', desc: 'Red channel only', preview: 'filter:sepia(1) hue-rotate(-30deg) saturate(3);' },
-                        { key: 'blueChannel', icon: '🟦', desc: 'Blue channel only', preview: 'filter:sepia(1) hue-rotate(180deg) saturate(3);' },
-                        { key: 'greenChannel', icon: '🟩', desc: 'Green channel only', preview: 'filter:sepia(1) hue-rotate(80deg) saturate(3);' },
-                        { key: 'solarize', icon: '☀️', desc: 'Partial invert', preview: 'filter:invert(0.8) contrast(1.5);' },
-                        { key: 'colorDrain', icon: '🩶', desc: 'Desaturate pulse', preview: 'filter:saturate(0);' },
-                        { key: 'cyberpunk', icon: '🤖', desc: 'Neon color cycling', preview: 'animation:hypnoPreviewHue 1s linear infinite;filter:saturate(2);' },
-                        { key: 'bloodMoon', icon: '🩸', desc: 'Deep red overlay', preview: 'filter:sepia(1) hue-rotate(-20deg) saturate(5) brightness(0.7);' },
-                        { key: 'retroWave', icon: '🌆', desc: 'Synthwave palette', preview: 'background:linear-gradient(135deg,#c864ff,#0ff);' }
-                    ],
-                    'Overlay / Complex 🎭': [
-                        { key: 'tunnel', icon: '🌀', desc: 'Tunnel vortex overlay', preview: 'background:radial-gradient(circle,transparent 30%,rgba(0,0,0,0.8) 100%);' },
-                        { key: 'strobe', icon: '💡', desc: 'Flash strobe', preview: 'animation:hypnoPreviewStrobe 0.5s infinite;' },
-                        { key: 'hologram', icon: '🔮', desc: 'Hologram flicker', preview: 'box-shadow:2px 0 #0ff,-2px 0 #f0f;animation:hypnoPreviewStrobe 0.15s steps(2) infinite;' },
-                        { key: 'oldTV', icon: '📟', desc: 'Old TV jitter', preview: 'animation:hypnoPreviewGlitch 0.08s steps(3) infinite;' },
-                        { key: 'subliminalFlash', icon: '⚡', desc: 'Bright white flash', preview: 'background:#fff;' },
-                        { key: 'matrixRain', icon: '🟢', desc: 'Matrix code rain', preview: 'background:#000;color:#0f0;font-size:8px;overflow:hidden;line-height:1;' },
-                        { key: 'speedLines', icon: '💨', desc: 'Radial speed lines', preview: 'background:repeating-conic-gradient(transparent 0deg,transparent 8deg,rgba(255,255,255,0.05) 8deg,rgba(255,255,255,0.05) 10deg);' },
-                        { key: 'datamosh', icon: '📼', desc: 'Data corruption', preview: 'background:linear-gradient(0deg,#333 25%,transparent 25%,transparent 50%,#444 50%,#444 75%,transparent 75%);background-size:100% 8px;' },
-                        { key: 'ghostTrail', icon: '👻', desc: 'Afterimage trail', preview: 'box-shadow:3px 3px 8px rgba(200,100,255,0.4),-3px -3px 8px rgba(100,200,255,0.4);' },
-                        { key: 'fishEye', icon: '🐟', desc: 'Fish eye lens', preview: 'border-radius:50%;transform:scale(1.1);' }
-                    ],
-                    'Extreme ⚠️': [
-                        { key: 'kaleidoscope', icon: '🔮', desc: 'Kaleidoscope fractal', preview: 'background:conic-gradient(from 0deg,#f0f,#0ff,#ff0,#f0f);' },
-                        { key: 'liquidWarp', icon: '🌊', desc: 'Liquid distortion', preview: 'animation:hypnoPreviewLiquid 2s ease-in-out infinite;border-radius:30% 70% 70% 30% / 30% 30% 70% 70%;' },
-                        { key: 'vortex', icon: '🌪️', desc: 'Spin vortex (motion!)', preview: 'animation:hypnoPreviewVortex 2s linear infinite;' },
-                        { key: 'blackout', icon: '⬛', desc: 'Random blackouts', preview: 'background:#000;' },
-                        { key: 'whiteout', icon: '⬜', desc: 'Blinding white flash', preview: 'background:#fff;' },
-                        { key: 'chromaStorm', icon: '🌈', desc: 'Crazy color storm', preview: 'animation:hypnoPreviewHue 0.3s linear infinite;filter:saturate(5);' }
-                    ]
-                };
+                    // Effect definitions with icons, descriptions, and preview CSS — 46 effects in 5 categories
+                    const effects = {
+                        'Visual / Chill 👁️': [
+                            { key: 'scanlines', icon: '📺', desc: 'CRT scanlines overlay', preview: 'background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.3) 2px,rgba(0,0,0,0.3) 4px);' },
+                            { key: 'rgbShift', icon: '🌈', desc: 'RGB color split', preview: 'box-shadow:2px 0 #f0f,-2px 0 #0ff;' },
+                            { key: 'pixelate', icon: '🟩', desc: 'Pixel mosaic effect', preview: 'image-rendering:pixelated;background-size:8px 8px;background-image:repeating-conic-gradient(#333 0% 25%,#555 0% 50%);' },
+                            { key: 'textSubliminal', icon: '👁️', desc: 'Flash hidden words', preview: '' },
+                            { key: 'breathe', icon: '🫁', desc: 'Breathing pulse', preview: 'animation:hypnoPreviewBreathe 2s ease-in-out infinite;' },
+                            { key: 'tilt', icon: '📐', desc: 'Subtle tilt shifts', preview: 'transform:rotate(3deg);' },
+                            { key: 'mirror', icon: '🪞', desc: 'Mirror flip axis', preview: 'transform:scaleX(-1);' },
+                            { key: 'colorCycle', icon: '🎡', desc: 'Hue rotation cycle', preview: 'animation:hypnoPreviewHue 2s linear infinite;' },
+                            { key: 'fadePulse', icon: '💫', desc: 'Opacity oscillation', preview: 'animation:hypnoFadePulse 1.5s ease-in-out infinite;' },
+                            { key: 'filmGrain', icon: '🎞️', desc: 'Film grain overlay', preview: 'background:repeating-conic-gradient(#333 0% 25%,#444 0% 50%);background-size:4px 4px;' },
+                            { key: 'sepiaFlash', icon: '📜', desc: 'Quick sepia flash', preview: 'filter:sepia(1);' }
+                        ],
+                        'Motion / Transform 🌊': [
+                            { key: 'doubleVision', icon: '👓', desc: 'Double vision ghost', preview: 'box-shadow:3px 3px 0 rgba(255,100,100,0.5),-3px -3px 0 rgba(100,100,255,0.5);' },
+                            { key: 'verticalStretch', icon: '↕️', desc: 'Screen stretch warp', preview: 'transform:scaleY(1.3);' },
+                            { key: 'glitch', icon: '⚡', desc: 'Screen glitch bursts', preview: 'animation:hypnoPreviewGlitch 0.3s infinite;' },
+                            { key: 'zoomPulse', icon: '🔍', desc: 'Zoom in/out pulse', preview: 'animation:hypnoPreviewBreathe 1s ease-in-out infinite;' },
+                            { key: 'skewHorizontal', icon: '↗️', desc: 'Horizontal skew', preview: 'transform:skewX(8deg);' },
+                            { key: 'skewVertical', icon: '↘️', desc: 'Vertical skew', preview: 'transform:skewY(5deg);' },
+                            { key: 'wobble', icon: '〰️', desc: 'Sine-wave wobble', preview: 'animation:hypnoPreviewGlitch 0.5s ease-in-out infinite;' },
+                            { key: 'heartbeat', icon: '💓', desc: 'Heartbeat pulse', preview: 'animation:hypnoPreviewBreathe 0.6s ease-in-out infinite;' },
+                            { key: 'earthquake', icon: '🌋', desc: 'Heavy screen shake', preview: 'animation:hypnoPreviewGlitch 0.1s linear infinite;' },
+                            { key: 'drunkMode', icon: '🍺', desc: 'Dizzy blur + sway', preview: 'filter:blur(1px);transform:rotate(2deg) skewX(3deg);' }
+                        ],
+                        'Color / Filter 🎨': [
+                            { key: 'negativeFlash', icon: '🔳', desc: 'Brief color invert', preview: 'filter:invert(1);' },
+                            { key: 'thermalVision', icon: '🌡️', desc: 'Thermal camera look', preview: 'filter:hue-rotate(180deg) contrast(2) saturate(3);' },
+                            { key: 'nightVision', icon: '🌙', desc: 'Green night vision', preview: 'filter:sepia(1) hue-rotate(80deg) saturate(4) brightness(1.5);' },
+                            { key: 'redChannel', icon: '🟥', desc: 'Red channel only', preview: 'filter:sepia(1) hue-rotate(-30deg) saturate(3);' },
+                            { key: 'blueChannel', icon: '🟦', desc: 'Blue channel only', preview: 'filter:sepia(1) hue-rotate(180deg) saturate(3);' },
+                            { key: 'greenChannel', icon: '🟩', desc: 'Green channel only', preview: 'filter:sepia(1) hue-rotate(80deg) saturate(3);' },
+                            { key: 'solarize', icon: '☀️', desc: 'Partial invert', preview: 'filter:invert(0.8) contrast(1.5);' },
+                            { key: 'colorDrain', icon: '🩶', desc: 'Desaturate pulse', preview: 'filter:saturate(0);' },
+                            { key: 'cyberpunk', icon: '🤖', desc: 'Neon color cycling', preview: 'animation:hypnoPreviewHue 1s linear infinite;filter:saturate(2);' },
+                            { key: 'bloodMoon', icon: '🩸', desc: 'Deep red overlay', preview: 'filter:sepia(1) hue-rotate(-20deg) saturate(5) brightness(0.7);' },
+                            { key: 'retroWave', icon: '🌆', desc: 'Synthwave palette', preview: 'background:linear-gradient(135deg,#c864ff,#0ff);' }
+                        ],
+                        'Overlay / Complex 🎭': [
+                            { key: 'tunnel', icon: '🌀', desc: 'Tunnel vortex overlay', preview: 'background:radial-gradient(circle,transparent 30%,rgba(0,0,0,0.8) 100%);' },
+                            { key: 'strobe', icon: '💡', desc: 'Flash strobe', preview: 'animation:hypnoPreviewStrobe 0.5s infinite;' },
+                            { key: 'hologram', icon: '🔮', desc: 'Hologram flicker', preview: 'box-shadow:2px 0 #0ff,-2px 0 #f0f;animation:hypnoPreviewStrobe 0.15s steps(2) infinite;' },
+                            { key: 'oldTV', icon: '📟', desc: 'Old TV jitter', preview: 'animation:hypnoPreviewGlitch 0.08s steps(3) infinite;' },
+                            { key: 'subliminalFlash', icon: '⚡', desc: 'Bright white flash', preview: 'background:#fff;' },
+                            { key: 'matrixRain', icon: '🟢', desc: 'Matrix code rain', preview: 'background:#000;color:#0f0;font-size:8px;overflow:hidden;line-height:1;' },
+                            { key: 'speedLines', icon: '💨', desc: 'Radial speed lines', preview: 'background:repeating-conic-gradient(transparent 0deg,transparent 8deg,rgba(255,255,255,0.05) 8deg,rgba(255,255,255,0.05) 10deg);' },
+                            { key: 'datamosh', icon: '📼', desc: 'Data corruption', preview: 'background:linear-gradient(0deg,#333 25%,transparent 25%,transparent 50%,#444 50%,#444 75%,transparent 75%);background-size:100% 8px;' },
+                            { key: 'ghostTrail', icon: '👻', desc: 'Afterimage trail', preview: 'box-shadow:3px 3px 8px rgba(200,100,255,0.4),-3px -3px 8px rgba(100,200,255,0.4);' },
+                            { key: 'fishEye', icon: '🐟', desc: 'Fish eye lens', preview: 'border-radius:50%;transform:scale(1.1);' }
+                        ],
+                        'Extreme ⚠️': [
+                            { key: 'kaleidoscope', icon: '🔮', desc: 'Kaleidoscope fractal', preview: 'background:conic-gradient(from 0deg,#f0f,#0ff,#ff0,#f0f);' },
+                            { key: 'liquidWarp', icon: '🌊', desc: 'Liquid distortion', preview: 'animation:hypnoPreviewLiquid 2s ease-in-out infinite;border-radius:30% 70% 70% 30% / 30% 30% 70% 70%;' },
+                            { key: 'vortex', icon: '🌪️', desc: 'Spin vortex (motion!)', preview: 'animation:hypnoPreviewVortex 2s linear infinite;' },
+                            { key: 'blackout', icon: '⬛', desc: 'Random blackouts', preview: 'background:#000;' },
+                            { key: 'whiteout', icon: '⬜', desc: 'Blinding white flash', preview: 'background:#fff;' },
+                            { key: 'chromaStorm', icon: '🌈', desc: 'Crazy color storm', preview: 'animation:hypnoPreviewHue 0.3s linear infinite;filter:saturate(5);' }
+                        ]
+                    };
 
-                for (const [title, items] of Object.entries(effects)) {
-                    const h3 = document.createElement('h3');
-                    h3.textContent = title;
-                    h3.style.cssText = 'color:var(--text-secondary);font-size:0.85rem;margin:18px 0 10px;text-transform:uppercase;letter-spacing:1.5px;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:6px;';
-                    container.appendChild(h3);
+                    for (const [title, items] of Object.entries(effects)) {
+                        const h3 = document.createElement('h3');
+                        h3.textContent = title;
+                        h3.style.cssText = 'color:var(--text-secondary);font-size:0.85rem;margin:18px 0 10px;text-transform:uppercase;letter-spacing:1.5px;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:6px;';
+                        container.appendChild(h3);
 
-                    const grid = document.createElement('div');
-                    grid.className = 'hypno-effects-grid';
+                        const grid = document.createElement('div');
+                        grid.className = 'hypno-effects-grid';
 
-                    items.forEach(effect => {
-                        const card = document.createElement('div');
-                        card.className = 'hypno-effect-card' + (config[effect.key] !== false ? ' active' : '');
+                        items.forEach(effect => {
+                            const card = document.createElement('div');
+                            card.className = 'hypno-effect-card' + (config[effect.key] !== false ? ' active' : '');
 
-                        // Preview box
-                        const previewBox = document.createElement('div');
-                        previewBox.className = 'hypno-preview-box';
-                        if (effect.preview) {
-                            previewBox.style.cssText = effect.preview;
-                        }
-                        // Subliminal text special preview
-                        if (effect.key === 'textSubliminal') {
-                            previewBox.className += ' hypno-preview-text';
-                            previewBox.innerHTML = '<span>OBEY</span>';
-                        }
+                            // Preview box
+                            const previewBox = document.createElement('div');
+                            previewBox.className = 'hypno-preview-box';
+                            if (effect.preview) {
+                                previewBox.style.cssText = effect.preview;
+                            }
+                            // Subliminal text special preview
+                            if (effect.key === 'textSubliminal') {
+                                previewBox.className += ' hypno-preview-text';
+                                previewBox.innerHTML = '<span>OBEY</span>';
+                            }
 
-                        // Info
-                        const info = document.createElement('div');
-                        info.className = 'hypno-effect-info';
-                        info.innerHTML = `
+                            // Info
+                            const info = document.createElement('div');
+                            info.className = 'hypno-effect-info';
+                            info.innerHTML = `
                             <div class="hypno-effect-name">${effect.icon} ${effect.key.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase())}</div>
                             <div class="hypno-effect-desc">${effect.desc}</div>
                         `;
 
-                        // Toggle switch
-                        const toggle = document.createElement('label');
-                        toggle.className = 'hypno-toggle-switch';
-                        toggle.innerHTML = `<input type="checkbox" ${config[effect.key] !== false ? 'checked' : ''}><span class="hypno-slider"></span>`;
-                        toggle.querySelector('input').onchange = (e) => {
-                            updateConfig({ [effect.key]: e.target.checked });
-                            card.classList.toggle('active', e.target.checked);
-                        };
+                            // Toggle switch
+                            const toggle = document.createElement('label');
+                            toggle.className = 'hypno-toggle-switch';
+                            toggle.innerHTML = `<input type="checkbox" ${config[effect.key] !== false ? 'checked' : ''}><span class="hypno-slider"></span>`;
+                            toggle.querySelector('input').onchange = (e) => {
+                                updateConfig({ [effect.key]: e.target.checked });
+                                card.classList.toggle('active', e.target.checked);
+                            };
 
-                        card.appendChild(previewBox);
-                        card.appendChild(info);
-                        card.appendChild(toggle);
-                        grid.appendChild(card);
-                    });
-                    container.appendChild(grid);
-                }
+                            card.appendChild(previewBox);
+                            card.appendChild(info);
+                            card.appendChild(toggle);
+                            grid.appendChild(card);
+                        });
+                        container.appendChild(grid);
+                    }
 
-                const modal = Modal('🌀 Hypno Configuration', '');
-                const body = modal.querySelector('.modal-body');
-                body.innerHTML = '';
-                body.appendChild(container);
-                modal.querySelector('.modal-content').classList.add('hypno-config-modal');
-                document.body.appendChild(modal);
+                    const modal = Modal('🌀 Hypno Configuration', '');
+                    const body = modal.querySelector('.modal-body');
+                    body.innerHTML = '';
+                    body.appendChild(container);
+                    modal.querySelector('.modal-content').classList.add('hypno-config-modal');
+                    document.body.appendChild(modal);
+                };
+
+                tabContent.appendChild(profile);
+            }; // end renderProfileTab
+
+            // ── Settings Tab (nav visibility) ─────────────────────────────────────
+            const renderSettingsTab = () => {
+                const settingsDiv = document.createElement('div');
+                settingsDiv.className = 'settings-container';
+
+                const visibleKeys = getVisibleItems().map(i => i.key);
+
+                settingsDiv.innerHTML = `
+                    <h2 class="settings-title">⚙️ Navigation Settings</h2>
+                    <p class="settings-desc">Choose which pages appear in your navigation bar.</p>
+                    <div class="settings-nav-grid">
+                        ${ALL_NAV_ITEMS.map(item => `
+                            <label class="settings-nav-item ${visibleKeys.includes(item.key) ? 'enabled' : ''}"
+                                   data-key="${item.key}"
+                                   title="${item.label === 'Home' || item.label === 'Profile' ? 'Always visible' : ''}">
+                                <span class="settings-nav-icon">${item.icon}</span>
+                                <span class="settings-nav-label">${item.label}</span>
+                                <input type="checkbox"
+                                    ${visibleKeys.includes(item.key) ? 'checked' : ''}
+                                    ${item.key === 'home' || item.key === 'profile' ? 'disabled' : ''}>
+                                <span class="settings-nav-check"></span>
+                            </label>
+                        `).join('')}
+                    </div>
+                    <button class="btn-primary settings-save-btn" style="margin-top:20px;width:100%">✓ Apply Changes</button>
+                    <div class="settings-section-sep"></div>
+                    <h2 class="settings-title">🖼️ Offline Cache</h2>
+                    <p class="settings-desc">Clear cached media thumbnails to free up storage.</p>
+                    <button class="btn-secondary settings-clear-cache-btn" style="width:100%">🗑️ Clear Media Cache</button>
+                `;
+
+                // Apply changes
+                settingsDiv.querySelector('.settings-save-btn').onclick = () => {
+                    const checked = [...settingsDiv.querySelectorAll('input[type=checkbox]:checked:not(:disabled)')]
+                        .map(cb => cb.closest('[data-key]').dataset.key);
+                    setVisibleItems(checked);
+                    Toast.show('✓ Navigation updated!', 'success');
+                };
+
+                // Toggle highlight
+                settingsDiv.querySelectorAll('.settings-nav-item').forEach(label => {
+                    const cb = label.querySelector('input');
+                    if (cb.disabled) return;
+                    cb.onchange = () => label.classList.toggle('enabled', cb.checked);
+                });
+
+                // Clear cache
+                settingsDiv.querySelector('.settings-clear-cache-btn').onclick = () => {
+                    if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+                        navigator.serviceWorker.controller.postMessage({ type: 'CLEAR_MEDIA_CACHE' });
+                        Toast.show('Media cache cleared', 'success');
+                    } else {
+                        Toast.show('Cache already empty or SW not active', 'info');
+                    }
+                };
+
+                tabContent.appendChild(settingsDiv);
             };
 
-            container.appendChild(profile);
+            showTab('profile');
 
         } catch (error) {
             console.error(error);
@@ -1808,11 +1949,23 @@ const UI = {
 
     // ── Slideshow Controller ─────────────────────────────────────────────────
     _openSlideshow: (items, parentContainer, startIndex = 0) => {
-        // Remove any existing slideshow
         document.querySelector('.slideshow-overlay')?.remove();
 
         const STORAGE_KEY_DUR = 'slideshowImageDuration';
+        const STORAGE_KEY_TRANS = 'slideshowTransition';
+        const STORAGE_KEY_SURPRISE = 'slideshowSurprise';
         let imageDuration = parseInt(localStorage.getItem(STORAGE_KEY_DUR) || '5000', 10);
+        let transition = localStorage.getItem(STORAGE_KEY_TRANS) || 'fade';
+        let surpriseMode = localStorage.getItem(STORAGE_KEY_SURPRISE) === 'true';
+        // Feature 26: live photo filters
+        const PHOTO_FILTERS = [
+            { label: 'Normal', css: 'none' },
+            { label: 'B&W', css: 'grayscale(1)' },
+            { label: 'Sépia', css: 'sepia(1)' },
+            { label: 'Vivid', css: 'saturate(2.2) contrast(1.1)' },
+            { label: 'Doux', css: 'brightness(1.1) contrast(0.9) saturate(0.8)' },
+        ];
+        let filterIdx = 0;
 
         const overlay = document.createElement('div');
         overlay.className = 'slideshow-overlay';
@@ -1829,15 +1982,32 @@ const UI = {
                     <button class="ss-btn" id="ss-prev" aria-label="Previous">&#8249;</button>
                     <button class="ss-btn ss-play-pause" id="ss-play" aria-label="Pause">&#9646;&#9646;</button>
                     <button class="ss-btn" id="ss-next" aria-label="Next">&#8250;</button>
-                    <div class="ss-timer-wrap">
-                        <span class="ss-timer-label">⏱ Image Timer</span>
-                        <div class="ss-timer-options" id="ss-timer-opts">
+                    <div class="ss-timer-wrap" id="ss-timer-section">
+                        <span class="ss-timer-label">⏱ Timer</span>
+                        <div class="ss-timer-options">
                             <button class="ss-timer-btn${imageDuration === 3000 ? ' active' : ''}">3s</button>
                             <button class="ss-timer-btn${imageDuration === 5000 ? ' active' : ''}">5s</button>
                             <button class="ss-timer-btn${imageDuration === 8000 ? ' active' : ''}">8s</button>
                             <button class="ss-timer-btn${imageDuration === 15000 ? ' active' : ''}">15s</button>
                         </div>
                     </div>
+                    <div class="ss-timer-wrap">
+                        <span class="ss-timer-label">🌀 Transition</span>
+                        <div class="ss-timer-options" id="ss-trans-opts">
+                            ${['fade', 'slide', 'zoom', 'flip'].map(t =>
+            `<button class="ss-timer-btn${transition === t ? ' active' : ''}" data-trans="${t}">${t}</button>`
+        ).join('')}
+                        </div>
+                    </div>
+                    <div class="ss-timer-wrap">
+                        <span class="ss-timer-label">🎨 Filter</span>
+                        <div class="ss-timer-options" id="ss-filter-opts">
+                            ${PHOTO_FILTERS.map((f, i) =>
+            `<button class="ss-timer-btn${i === 0 ? ' active' : ''}" data-fi="${i}">${f.label}</button>`
+        ).join('')}
+                        </div>
+                    </div>
+                    <button class="ss-btn ss-surprise-btn${surpriseMode ? ' active' : ''}" id="ss-surprise" title="Surprise Mode">&#128591;</button>
                     <button class="ss-btn ss-close-btn" id="ss-close" aria-label="Close">✕</button>
                 </div>
                 <div class="slideshow-counter" id="ss-counter"></div>
@@ -1851,13 +2021,21 @@ const UI = {
         let timer = null;
         let progressRaf = null;
         let progressStart = null;
-        let currentProgressDuration = imageDuration;
         let activeVideoEl = null;
 
         const mediaWrap = overlay.querySelector('#ss-media-wrap');
         const progressFill = overlay.querySelector('#ss-progress');
         const counter = overlay.querySelector('#ss-counter');
         const playBtn = overlay.querySelector('#ss-play');
+        const timerSection = overlay.querySelector('#ss-timer-section');
+
+        // Feature 44: surprise mode hides timer and counter
+        const applySurprise = () => {
+            timerSection.style.display = surpriseMode ? 'none' : '';
+            counter.style.display = surpriseMode ? 'none' : '';
+            overlay.querySelector('#ss-progress').parentElement.style.opacity = surpriseMode ? '0' : '1';
+        };
+        applySurprise();
 
         const close = () => {
             clearTimeout(timer);
@@ -1866,71 +2044,75 @@ const UI = {
             overlay.classList.remove('active');
             setTimeout(() => overlay.remove(), 350);
         };
-
         overlay.querySelector('#ss-close').onclick = close;
-        // Also close on outside click
         overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
-        // ESC key
-        const keyHandler = e => { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', keyHandler); } if (e.key === 'ArrowLeft') prev(); if (e.key === 'ArrowRight') next(); };
+        const keyHandler = e => {
+            if (e.key === 'Escape') { close(); document.removeEventListener('keydown', keyHandler); }
+            if (e.key === 'ArrowLeft') prev();
+            if (e.key === 'ArrowRight') next();
+        };
         document.addEventListener('keydown', keyHandler);
+
+        // Feature 41: transition animation between items
+        const applyTransitionOut = (el) => {
+            el.classList.add(`ss-trans-out-${transition}`);
+        };
+        const applyTransitionIn = (el) => {
+            el.classList.add(`ss-trans-in-${transition}`);
+        };
 
         const setProgress = (duration) => {
             cancelAnimationFrame(progressRaf);
-            progressFill.style.transition = 'none';
             progressFill.style.width = '0%';
-            currentProgressDuration = duration;
             progressStart = performance.now();
-
             const step = (now) => {
-                const elapsed = now - progressStart;
-                const pct = Math.min(100, (elapsed / currentProgressDuration) * 100);
-                progressFill.style.transition = 'none';
+                const pct = Math.min(100, ((now - progressStart) / duration) * 100);
                 progressFill.style.width = pct + '%';
                 if (pct < 100) progressRaf = requestAnimationFrame(step);
             };
-            if (isPlaying) progressRaf = requestAnimationFrame(step);
+            if (isPlaying && !surpriseMode) progressRaf = requestAnimationFrame(step);
         };
 
-        const showItem = (idx) => {
+        const showItem = (idx, skipTransition = false) => {
             clearTimeout(timer);
             cancelAnimationFrame(progressRaf);
+            const oldWrap = mediaWrap.firstChild;
+            if (oldWrap && !skipTransition) applyTransitionOut(oldWrap);
+
             activeVideoEl?.pause();
             activeVideoEl = null;
 
             const item = items[idx];
             if (!item) return;
+            if (!surpriseMode) counter.textContent = `${idx + 1} / ${items.length}`;
 
-            counter.textContent = `${idx + 1} / ${items.length}`;
-            mediaWrap.innerHTML = '';
+            MediaStats.recordView(item.data.id);
 
             // Preload neighbours
             const mediaArr = items.map(i => i.data);
             Cache.preloadAround(mediaArr, idx, (med, w) =>
                 med.mediaMetadata?.video ? `${med.baseUrl}=dv` : `${med.baseUrl}=w${w}`);
 
+            const newWrap = document.createElement('div');
+            newWrap.className = 'slideshow-media-wrap';
+            newWrap.style.position = 'absolute';
+            newWrap.style.inset = '0';
+            newWrap.style.display = 'flex';
+            newWrap.style.alignItems = 'center';
+            newWrap.style.justifyContent = 'center';
+
             if (item.type === 'video') {
                 const vid = document.createElement('video');
                 vid.src = `${item.data.baseUrl}=dv`;
-                vid.autoplay = true;
-                vid.muted = false;
-                vid.playsInline = true;
-                vid.controls = false;
+                vid.autoplay = true; vid.muted = false;
+                vid.playsInline = true; vid.controls = false;
                 vid.className = 'ss-video';
-                mediaWrap.appendChild(vid);
+                newWrap.appendChild(vid);
                 activeVideoEl = vid;
-
-                // Progress bar tracks video
-                vid.addEventListener('loadedmetadata', () => {
-                    setProgress(vid.duration * 1000 || 10000);
-                });
-                vid.addEventListener('ended', () => {
-                    cancelAnimationFrame(progressRaf);
-                    progressFill.style.width = '100%';
-                    if (isPlaying) setTimeout(next, 300);
-                });
+                vid.addEventListener('loadedmetadata', () => setProgress(vid.duration * 1000 || 10000));
+                vid.addEventListener('ended', () => { if (isPlaying) setTimeout(next, 300); });
                 vid.addEventListener('error', () => setTimeout(next, 1000));
                 vid.play().catch(() => { });
-
             } else {
                 const img = document.createElement('img');
                 img.src = Gallery.getImageURL(item.data, 1080);
@@ -1938,121 +2120,124 @@ const UI = {
                 img.className = 'ss-image';
                 img.draggable = false;
                 img.decoding = 'async';
-                mediaWrap.appendChild(img);
-
+                // Apply current filter (feature 26)
+                if (PHOTO_FILTERS[filterIdx].css !== 'none') img.style.filter = PHOTO_FILTERS[filterIdx].css;
+                newWrap.appendChild(img);
                 setProgress(imageDuration);
-                if (isPlaying) {
-                    timer = setTimeout(next, imageDuration);
-                }
+                if (isPlaying) timer = setTimeout(next, imageDuration);
             }
+
+            if (!skipTransition) applyTransitionIn(newWrap);
+            const mediaArea = overlay.querySelector('.slideshow-media-area');
+            // Remove old after transition
+            if (oldWrap) setTimeout(() => { try { oldWrap.remove(); } catch { } }, 350);
+            mediaArea.insertBefore(newWrap, mediaArea.querySelector('.slideshow-progress-bar'));
         };
 
         const next = () => { currentIdx = (currentIdx + 1) % items.length; showItem(currentIdx); };
         const prev = () => { currentIdx = (currentIdx - 1 + items.length) % items.length; showItem(currentIdx); };
 
-        overlay.querySelector('#ss-prev').onclick = () => { prev(); };
-        overlay.querySelector('#ss-next').onclick = () => { next(); };
+        overlay.querySelector('#ss-prev').onclick = prev;
+        overlay.querySelector('#ss-next').onclick = next;
 
         playBtn.onclick = () => {
             isPlaying = !isPlaying;
             playBtn.innerHTML = isPlaying ? '&#9646;&#9646;' : '&#9654;';
             if (isPlaying) {
-                // Resume
                 const item = items[currentIdx];
-                if (item?.type === 'video') {
-                    activeVideoEl?.play();
-                } else {
-                    progressStart = performance.now() - (parseFloat(progressFill.style.width) / 100) * imageDuration;
-                    const step = (now) => {
-                        const elapsed = now - progressStart;
-                        const pct = Math.min(100, (elapsed / imageDuration) * 100);
-                        progressFill.style.width = pct + '%';
-                        if (pct < 100) progressRaf = requestAnimationFrame(step);
-                    };
-                    progressRaf = requestAnimationFrame(step);
-                    timer = setTimeout(next, imageDuration - (parseFloat(progressFill.style.width) / 100) * imageDuration);
-                }
+                if (item?.type === 'video') activeVideoEl?.play();
+                else { setProgress(imageDuration); timer = setTimeout(next, imageDuration); }
             } else {
-                // Pause
                 cancelAnimationFrame(progressRaf);
                 clearTimeout(timer);
                 activeVideoEl?.pause();
             }
         };
 
-        // Timer option buttons
+        // Timer buttons
         overlay.querySelectorAll('.ss-timer-btn').forEach(btn => {
+            if (btn.dataset.trans) {
+                btn.onclick = () => {
+                    transition = btn.dataset.trans;
+                    localStorage.setItem(STORAGE_KEY_TRANS, transition);
+                    overlay.querySelectorAll('[data-trans]').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                };
+                return;
+            }
+            if (btn.dataset.fi !== undefined) {
+                btn.onclick = () => {
+                    filterIdx = parseInt(btn.dataset.fi);
+                    overlay.querySelectorAll('[data-fi]').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    // Apply filter to current image
+                    const imgEl = overlay.querySelector('.ss-image');
+                    if (imgEl) imgEl.style.filter = PHOTO_FILTERS[filterIdx].css === 'none' ? '' : PHOTO_FILTERS[filterIdx].css;
+                };
+                return;
+            }
             btn.onclick = () => {
                 const dur = parseInt(btn.textContent) * 1000;
                 imageDuration = dur;
                 localStorage.setItem(STORAGE_KEY_DUR, String(dur));
-                overlay.querySelectorAll('.ss-timer-btn').forEach(b => b.classList.remove('active'));
+                overlay.querySelectorAll('.ss-timer-btn:not([data-trans]):not([data-fi])').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
-                // If current is image, restart timer with new duration
-                const item = items[currentIdx];
-                if (item?.type !== 'video' && isPlaying) {
-                    clearTimeout(timer);
-                    setProgress(dur);
-                    timer = setTimeout(next, dur);
+                if (items[currentIdx]?.type !== 'video' && isPlaying) {
+                    clearTimeout(timer); setProgress(dur); timer = setTimeout(next, dur);
                 }
             };
         });
 
-        // Touch swipe support (mobile)
+        // Surprise mode toggle (feature 44)
+        overlay.querySelector('#ss-surprise').onclick = () => {
+            surpriseMode = !surpriseMode;
+            localStorage.setItem(STORAGE_KEY_SURPRISE, String(surpriseMode));
+            overlay.querySelector('#ss-surprise').classList.toggle('active', surpriseMode);
+            applySurprise();
+        };
+
+        // Touch swipe
         let touchStartX = 0, touchStartY = 0;
         overlay.addEventListener('touchstart', e => { touchStartX = e.touches[0].clientX; touchStartY = e.touches[0].clientY; }, { passive: true });
         overlay.addEventListener('touchend', e => {
             const dx = e.changedTouches[0].clientX - touchStartX;
             const dy = Math.abs(e.changedTouches[0].clientY - touchStartY);
-            if (dy > 60) return; // vertical swipe = ignore
-            if (dx < -40) next();
-            else if (dx > 40) prev();
+            if (dy > 60) return;
+            if (dx < -40) next(); else if (dx > 40) prev();
         }, { passive: true });
 
-        showItem(currentIdx);
+        showItem(currentIdx, true);
+
     },
 
-    // ── Prefetch next N media items — adaptatif selon la connexion ──
+    // ── Prefetch next N media items — adaptive to connection ──
     _prefetchMedia: (items, startIdx = 0, count = 40) => {
-        // Détection saveData / connexion lente
         const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
         const isSaveData = conn?.saveData === true;
         const isSlow = conn && ['slow-2g', '2g', '3g'].includes(conn.effectiveType);
-
-        // Réduire le nombre de préchargements sur mobile lent
         const effectiveCount = isSaveData ? 0 : isSlow ? Math.min(count, 5) : count;
+        if (effectiveCount === 0) return;
 
-        if (effectiveCount === 0) {
-            console.log('[Prefetch] Skipped — saveData mode active');
-            return;
-        }
-
-        // Supprimer les anciens liens prefetch
         document.querySelectorAll('link[data-prefetch]').forEach(l => l.remove());
 
         const end = Math.min(startIdx + effectiveCount, items.length);
         for (let i = startIdx; i < end; i++) {
             const item = items[i];
             if (!item || !item.baseUrl || item._isLocal) continue;
-
             const link = document.createElement('link');
             link.rel = 'prefetch';
             link.setAttribute('data-prefetch', 'media');
-
             if (item.mediaMetadata?.video) {
                 link.as = 'video';
                 link.href = `${item.baseUrl}=dv`;
             } else {
                 link.as = 'image';
-                // Résolution réduite sur connexion lente
-                const w = isSlow ? 720 : 1080;
-                link.href = `${item.baseUrl}=w${w}`;
+                link.href = `${item.baseUrl}=w${isSlow ? 720 : 1080}`;
             }
-
             document.head.appendChild(link);
         }
-        console.log(`[Prefetch] Queued ${end - startIdx} items (${conn?.effectiveType ?? 'unknown'} connection)`);
     }
 };
 
 export default UI;
+
