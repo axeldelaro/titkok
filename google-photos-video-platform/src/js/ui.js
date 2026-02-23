@@ -15,6 +15,7 @@ import Modal from '../components/modal.js';
 import HypnoPopups, { getConfig, updateConfig } from './hypno.js';
 import VisualEditor from './visual-editor.js';
 import FaceEditor from './face-editor.js';
+import Cache from './cache.js';
 
 const UI = {
     init: () => {
@@ -518,6 +519,7 @@ const UI = {
             // (IntersectionObserver fires async, this guarantees instant start)
             requestAnimationFrame(() => { liveCards.get(0)?._player?.activate(); });
             VisualEditor.reapply();
+            Cache.preloadAround(videos, 0, (item, w) => `${item.baseUrl}=w${w}`);
             UI._prefetchMedia(videos, 0, 20);
 
         } catch (error) {
@@ -764,6 +766,14 @@ const UI = {
             Toast.show('Mix shuffled! 🔀');
         };
         container.appendChild(shuffleBtn);
+
+        // ── Slideshow button ──
+        const slideshowBtn = document.createElement('button');
+        slideshowBtn.className = 'slideshow-float-btn';
+        slideshowBtn.innerHTML = '▶';
+        slideshowBtn.title = 'Slideshow';
+        container.appendChild(slideshowBtn);
+        slideshowBtn.onclick = () => UI._openSlideshow(mixItems, container);
 
         // Upload button
         const uploadBtn = document.createElement('button');
@@ -1028,15 +1038,30 @@ const UI = {
         // Hydrate the first few immediately
         hydrate(0);
 
-
         container.appendChild(feed);
         // Explicitly activate the first video card
         requestAnimationFrame(() => { liveCards.get(0)?._player?.activate(); });
         HypnoPopups.attach(container);
-        // Reapply visual editor filters + prefetch
         VisualEditor.reapply();
         const allMedia = mixItems.map(item => item.data);
+        Cache.preloadAround(allMedia, 0, (item, w) =>
+            item.mediaMetadata?.video ? `${item.baseUrl}=dv` : `${item.baseUrl}=w${w}`);
         UI._prefetchMedia(allMedia, 0, 40);
+
+        // Also hook into intersection observer to cache-ahead as user scrolls
+        const cacheObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (!entry.isIntersecting) return;
+                const idx = parseInt(entry.target.dataset.mixIdx ?? entry.target.dataset.idx ?? '-1', 10);
+                if (isNaN(idx) || idx < 0) return;
+                Cache.preloadAround(allMedia, idx, (item, w) =>
+                    item.mediaMetadata?.video ? `${item.baseUrl}=dv` : `${item.baseUrl}=w${w}`);
+            });
+        }, { threshold: 0.01 });
+        Array.from(feed.children).forEach(el => cacheObserver.observe(el));
+        new MutationObserver(muts => {
+            muts.forEach(m => m.addedNodes.forEach(n => { if (n.nodeType === 1) cacheObserver.observe(n); }));
+        }).observe(feed, { childList: true });
     },
 
     renderGallery: async (container) => {
@@ -1132,6 +1157,10 @@ const UI = {
             return;
         }
 
+        // ── Read view mode preference ──
+        const GAL_MODE_KEY = 'galleryViewMode';
+        let viewMode = localStorage.getItem(GAL_MODE_KEY) || 'feed'; // 'feed' or 'grid'
+
         // ── Floating buttons ──
         const shuffleBtn = document.createElement('button');
         shuffleBtn.className = 'feed-shuffle-btn';
@@ -1142,6 +1171,29 @@ const UI = {
             Toast.show('Gallery shuffled! 🔀');
         };
         container.appendChild(shuffleBtn);
+
+        // ── Slideshow button ──
+        const galSlideshowBtn = document.createElement('button');
+        galSlideshowBtn.className = 'slideshow-float-btn';
+        galSlideshowBtn.innerHTML = '▶';
+        galSlideshowBtn.title = 'Slideshow';
+        container.appendChild(galSlideshowBtn);
+        galSlideshowBtn.onclick = () => {
+            const items = images.map(img => ({ type: 'image', data: img }));
+            UI._openSlideshow(items, container);
+        };
+
+        // ── View mode toggle ──
+        const viewToggleBtn = document.createElement('button');
+        viewToggleBtn.className = 'view-toggle-btn';
+        viewToggleBtn.title = viewMode === 'grid' ? 'Switch to Feed' : 'Switch to Grid';
+        viewToggleBtn.innerHTML = viewMode === 'grid' ? '☰' : '⊞';
+        viewToggleBtn.onclick = () => {
+            viewMode = viewMode === 'grid' ? 'feed' : 'grid';
+            localStorage.setItem(GAL_MODE_KEY, viewMode);
+            renderGalleryView();
+        };
+        container.appendChild(viewToggleBtn);
 
         const uploadBtn = document.createElement('button');
         uploadBtn.className = 'gallery-float-upload';
@@ -1162,140 +1214,197 @@ const UI = {
         // Count badge
         const countBadge = document.createElement('div');
         countBadge.className = 'feed-count-badge';
-        countBadge.textContent = `${images.length} images`;
+        countBadge.textContent = `${images.length} photos`;
         container.appendChild(countBadge);
 
-        // ── Scroll container (TikTok-style) ──
-        const feed = document.createElement('div');
-        feed.className = 'video-feed';
+        // ── Container for swappable view ──
+        const viewContainer = document.createElement('div');
+        viewContainer.className = 'gallery-view-container';
+        container.appendChild(viewContainer);
 
-        const createImageCard = (image, index) => {
-            const card = document.createElement('div');
-            card.className = 'video-card-feed gallery-card';
-            card.dataset.idx = index;
-
-            const imgContainer = document.createElement('div');
-            imgContainer.className = 'gallery-img-container';
-
-            const img = document.createElement('img');
-            img.src = Gallery.getImageURL(image);
-            img.alt = image.filename || 'Image';
-            img.draggable = false;
-            img.loading = 'lazy';
-            img.decoding = 'async';
-
-            // Detect portrait from metadata
-            const meta = image.mediaMetadata || {};
-            const w = parseInt(meta.width) || 0;
-            const h = parseInt(meta.height) || 0;
-            if (h > w * 1.2) {
-                card.classList.add('portrait');
-                img.classList.add('gallery-img-portrait');
+        const renderGalleryView = () => {
+            viewContainer.innerHTML = '';
+            viewToggleBtn.innerHTML = viewMode === 'grid' ? '☰' : '⊞';
+            viewToggleBtn.title = viewMode === 'grid' ? 'Switch to Feed' : 'Switch to Grid';
+            if (viewMode === 'grid') {
+                renderGridView();
             } else {
-                img.classList.add('gallery-img-landscape');
+                renderFeedView();
             }
-
-            imgContainer.appendChild(img);
-            card.appendChild(imgContainer);
-
-            // Info overlay
-            const info = document.createElement('div');
-            info.className = 'feed-info-overlay';
-            info.innerHTML = `<h3>${image.filename || 'Image'}</h3>`;
-            card.appendChild(info);
-
-            const actions = document.createElement('div');
-            actions.className = 'feed-actions';
-            actions.innerHTML = `
-                <button class="btn-icon edit-btn" title="AI Retouch">🪄</button>
-            `;
-            actions.querySelector('.edit-btn').onclick = (e) => {
-                e.stopPropagation();
-                FaceEditor.open(image);
-            };
-            card.appendChild(actions);
-
-            return card;
         };
 
-        images.forEach((image, i) => {
-            feed.appendChild(createImageCard(image, i));
-        });
+        // ─── GRID VIEW ──────────────────────────────────────────────────────────
+        const renderGridView = () => {
+            const grid = document.createElement('div');
+            grid.className = 'photo-grid';
+            viewContainer.appendChild(grid);
 
-        // ── Infinite Loop ──
-        const CLONE_COUNT = Math.min(3, images.length);
-        for (let i = 0; i < CLONE_COUNT; i++) {
-            const clone = createImageCard(images[i], `clone-end-${i}`);
-            clone.classList.add('gallery-clone');
-            feed.appendChild(clone);
-        }
-        for (let i = CLONE_COUNT - 1; i >= 0; i--) {
-            const srcIdx = images.length - 1 - i;
-            if (srcIdx >= 0) {
-                const clone = createImageCard(images[srcIdx], `clone-start-${i}`);
-                clone.classList.add('gallery-clone');
-                feed.insertBefore(clone, feed.firstChild);
-            }
-        }
+            // Preload visible image batch
+            Cache.preloadImageURLs(images.slice(0, 24).map(img => Gallery.getImageURL(img, 540)));
 
-        container.appendChild(feed);
+            images.forEach((image, i) => {
+                const cell = document.createElement('div');
+                cell.className = 'photo-grid-cell';
 
-        requestAnimationFrame(() => {
-            const firstReal = feed.children[CLONE_COUNT];
-            if (firstReal) {
-                feed.scrollTop = firstReal.offsetTop;
-            }
-        });
+                const img = document.createElement('img');
+                const thumbUrl = Gallery.getImageURL(image, 540);
+                img.src = thumbUrl;
+                img.alt = image.filename || 'Photo';
+                img.loading = i < 12 ? 'eager' : 'lazy';
+                img.decoding = 'async';
+                img.draggable = false;
+                cell.appendChild(img);
 
-        // Infinite scroll wrapping
-        let scrolling = false;
-        feed.addEventListener('scrollend', () => {
-            if (scrolling) return;
-            scrolling = true;
+                // Edit button overlay
+                const overlay = document.createElement('div');
+                overlay.className = 'photo-grid-overlay';
+                overlay.innerHTML = `<button class="photo-grid-edit-btn" title="AI Retouch">🪄</button>`;
+                overlay.querySelector('.photo-grid-edit-btn').onclick = (e) => {
+                    e.stopPropagation();
+                    FaceEditor.open(image);
+                };
+                cell.appendChild(overlay);
 
-            const cardHeight = feed.children[0]?.offsetHeight || window.innerHeight;
-            const scrollTop = feed.scrollTop;
-            const totalReal = images.length;
-            const firstRealTop = feed.children[CLONE_COUNT]?.offsetTop || 0;
-            const lastRealBottom = feed.children[CLONE_COUNT + totalReal - 1];
+                // Click = open lightbox slideshow
+                cell.onclick = (e) => {
+                    if (e.target.closest('.photo-grid-edit-btn')) return;
+                    const items = images.map(img => ({ type: 'image', data: img }));
+                    UI._openSlideshow(items, container, i);
+                };
 
-            if (lastRealBottom && scrollTop >= lastRealBottom.offsetTop + cardHeight * 0.5) {
-                feed.style.scrollBehavior = 'auto';
-                feed.scrollTop = firstRealTop;
-                feed.style.scrollBehavior = '';
-            }
-            else if (scrollTop < firstRealTop - cardHeight * 0.5) {
-                feed.style.scrollBehavior = 'auto';
-                feed.scrollTop = lastRealBottom ? lastRealBottom.offsetTop : firstRealTop;
-                feed.style.scrollBehavior = '';
-            }
-
-            scrolling = false;
-        });
-
-        let scrollTimer;
-        feed.addEventListener('scroll', () => {
-            clearTimeout(scrollTimer);
-            scrollTimer = setTimeout(() => {
-                feed.dispatchEvent(new Event('scrollend'));
-            }, 150);
-        });
-
-        // Update counter
-        const observer = new IntersectionObserver((entries) => {
-            entries.forEach(entry => {
-                if (entry.isIntersecting) {
-                    const idx = entry.target.dataset.idx;
-                    if (idx && !String(idx).startsWith('clone')) {
-                        countBadge.textContent = `${parseInt(idx) + 1} / ${images.length}`;
-                    }
-                }
+                grid.appendChild(cell);
             });
-        }, { root: feed, threshold: 0.6 });
 
-        Array.from(feed.children).forEach(card => observer.observe(card));
+            // Intersection observer to cache-ahead on scroll through grid
+            const gridCacheObs = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (!entry.isIntersecting) return;
+                    const cellIdx = Array.from(grid.children).indexOf(entry.target);
+                    if (cellIdx < 0) return;
+                    Cache.preloadImageURLs(
+                        images.slice(cellIdx, cellIdx + 12).map(img => Gallery.getImageURL(img, 1080))
+                    );
+                });
+            }, { threshold: 0.1 });
+            Array.from(grid.children).forEach(el => gridCacheObs.observe(el));
+        };
+
+        // ─── FEED VIEW (TikTok-style) ────────────────────────────────────────────
+        const renderFeedView = () => {
+            const feed = document.createElement('div');
+            feed.className = 'video-feed';
+            viewContainer.appendChild(feed);
+
+            const createImageCard = (image, index) => {
+                const card = document.createElement('div');
+                card.className = 'video-card-feed gallery-card';
+                card.dataset.idx = index;
+
+                const imgContainer = document.createElement('div');
+                imgContainer.className = 'gallery-img-container';
+
+                const img = document.createElement('img');
+                img.src = Gallery.getImageURL(image);
+                img.alt = image.filename || 'Image';
+                img.draggable = false;
+                img.loading = 'lazy';
+                img.decoding = 'async';
+
+                // Detect portrait from metadata
+                const meta = image.mediaMetadata || {};
+                const w = parseInt(meta.width) || 0;
+                const h = parseInt(meta.height) || 0;
+                if (h > w * 1.2) {
+                    card.classList.add('portrait');
+                    img.classList.add('gallery-img-portrait');
+                } else {
+                    img.classList.add('gallery-img-landscape');
+                }
+
+                imgContainer.appendChild(img);
+                card.appendChild(imgContainer);
+
+                // Info overlay
+                const info = document.createElement('div');
+                info.className = 'feed-info-overlay';
+                info.innerHTML = `<h3>${image.filename || 'Image'}</h3>`;
+                card.appendChild(info);
+
+                const actions = document.createElement('div');
+                actions.className = 'feed-actions';
+                actions.innerHTML = `
+                <button class="btn-icon edit-btn" title="AI Retouch">🪄</button>
+            `;
+                actions.querySelector('.edit-btn').onclick = (e) => {
+                    e.stopPropagation();
+                    FaceEditor.open(image);
+                };
+                card.appendChild(actions);
+
+                return card;
+            };
+
+            const CLONE_COUNT = Math.min(3, images.length);
+            images.forEach((image, i) => feed.appendChild(createImageCard(image, i)));
+
+            // ── Infinite Loop clones ──
+            for (let i = 0; i < CLONE_COUNT; i++) {
+                const clone = createImageCard(images[i], `clone-end-${i}`);
+                clone.classList.add('gallery-clone'); feed.appendChild(clone);
+            }
+            for (let i = CLONE_COUNT - 1; i >= 0; i--) {
+                const srcIdx = images.length - 1 - i;
+                if (srcIdx >= 0) {
+                    const clone = createImageCard(images[srcIdx], `clone-start-${i}`);
+                    clone.classList.add('gallery-clone'); feed.insertBefore(clone, feed.firstChild);
+                }
+            }
+
+            requestAnimationFrame(() => {
+                const firstReal = feed.children[CLONE_COUNT];
+                if (firstReal) feed.scrollTop = firstReal.offsetTop;
+            });
+
+            // Infinite scroll wrapping
+            let scrolling = false;
+            feed.addEventListener('scrollend', () => {
+                if (scrolling) return;
+                scrolling = true;
+                const firstRealTop = feed.children[CLONE_COUNT]?.offsetTop || 0;
+                const lastRealBottom = feed.children[CLONE_COUNT + images.length - 1];
+                const cardHeight = feed.children[0]?.offsetHeight || window.innerHeight;
+                const scrollTop = feed.scrollTop;
+                if (lastRealBottom && scrollTop >= lastRealBottom.offsetTop + cardHeight * 0.5) {
+                    feed.style.scrollBehavior = 'auto'; feed.scrollTop = firstRealTop; feed.style.scrollBehavior = '';
+                } else if (scrollTop < firstRealTop - cardHeight * 0.5) {
+                    feed.style.scrollBehavior = 'auto'; feed.scrollTop = lastRealBottom ? lastRealBottom.offsetTop : firstRealTop; feed.style.scrollBehavior = '';
+                }
+                scrolling = false;
+            });
+            let scrollTimer;
+            feed.addEventListener('scroll', () => {
+                clearTimeout(scrollTimer);
+                scrollTimer = setTimeout(() => feed.dispatchEvent(new Event('scrollend')), 150);
+            });
+
+            // Update counter on scroll
+            const feedObs = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        const idx = entry.target.dataset.idx;
+                        if (idx && !String(idx).startsWith('clone')) {
+                            countBadge.textContent = `${parseInt(idx) + 1} / ${images.length} photos`;
+                            Cache.preloadAround(images, parseInt(idx), (item, w) => Gallery.getImageURL(item, w));
+                        }
+                    }
+                });
+            }, { root: feed, threshold: 0.6 });
+            Array.from(feed.children).forEach(card => feedObs.observe(card));
+        }; // end renderFeedView
+
+        renderGalleryView();
         HypnoPopups.attach(container);
-        // Précharger les images de la galerie
+        Cache.preloadAround(images, 0, (item, w) => Gallery.getImageURL(item, w));
         UI._prefetchMedia(images, 0, 20);
     },
 
@@ -1695,6 +1804,212 @@ const UI = {
         if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
         if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
         return date.toLocaleDateString();
+    },
+
+    // ── Slideshow Controller ─────────────────────────────────────────────────
+    _openSlideshow: (items, parentContainer, startIndex = 0) => {
+        // Remove any existing slideshow
+        document.querySelector('.slideshow-overlay')?.remove();
+
+        const STORAGE_KEY_DUR = 'slideshowImageDuration';
+        let imageDuration = parseInt(localStorage.getItem(STORAGE_KEY_DUR) || '5000', 10);
+
+        const overlay = document.createElement('div');
+        overlay.className = 'slideshow-overlay';
+        overlay.setAttribute('role', 'dialog');
+        overlay.setAttribute('aria-modal', 'true');
+
+        overlay.innerHTML = `
+            <div class="slideshow-inner">
+                <div class="slideshow-media-area">
+                    <div class="slideshow-media-wrap" id="ss-media-wrap"></div>
+                    <div class="slideshow-progress-bar"><div class="slideshow-progress-fill" id="ss-progress"></div></div>
+                </div>
+                <div class="slideshow-controls">
+                    <button class="ss-btn" id="ss-prev" aria-label="Previous">&#8249;</button>
+                    <button class="ss-btn ss-play-pause" id="ss-play" aria-label="Pause">&#9646;&#9646;</button>
+                    <button class="ss-btn" id="ss-next" aria-label="Next">&#8250;</button>
+                    <div class="ss-timer-wrap">
+                        <span class="ss-timer-label">⏱ Image Timer</span>
+                        <div class="ss-timer-options" id="ss-timer-opts">
+                            <button class="ss-timer-btn${imageDuration === 3000 ? ' active' : ''}">3s</button>
+                            <button class="ss-timer-btn${imageDuration === 5000 ? ' active' : ''}">5s</button>
+                            <button class="ss-timer-btn${imageDuration === 8000 ? ' active' : ''}">8s</button>
+                            <button class="ss-timer-btn${imageDuration === 15000 ? ' active' : ''}">15s</button>
+                        </div>
+                    </div>
+                    <button class="ss-btn ss-close-btn" id="ss-close" aria-label="Close">✕</button>
+                </div>
+                <div class="slideshow-counter" id="ss-counter"></div>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+        requestAnimationFrame(() => overlay.classList.add('active'));
+
+        let currentIdx = startIndex;
+        let isPlaying = true;
+        let timer = null;
+        let progressRaf = null;
+        let progressStart = null;
+        let currentProgressDuration = imageDuration;
+        let activeVideoEl = null;
+
+        const mediaWrap = overlay.querySelector('#ss-media-wrap');
+        const progressFill = overlay.querySelector('#ss-progress');
+        const counter = overlay.querySelector('#ss-counter');
+        const playBtn = overlay.querySelector('#ss-play');
+
+        const close = () => {
+            clearTimeout(timer);
+            cancelAnimationFrame(progressRaf);
+            activeVideoEl?.pause();
+            overlay.classList.remove('active');
+            setTimeout(() => overlay.remove(), 350);
+        };
+
+        overlay.querySelector('#ss-close').onclick = close;
+        // Also close on outside click
+        overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+        // ESC key
+        const keyHandler = e => { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', keyHandler); } if (e.key === 'ArrowLeft') prev(); if (e.key === 'ArrowRight') next(); };
+        document.addEventListener('keydown', keyHandler);
+
+        const setProgress = (duration) => {
+            cancelAnimationFrame(progressRaf);
+            progressFill.style.transition = 'none';
+            progressFill.style.width = '0%';
+            currentProgressDuration = duration;
+            progressStart = performance.now();
+
+            const step = (now) => {
+                const elapsed = now - progressStart;
+                const pct = Math.min(100, (elapsed / currentProgressDuration) * 100);
+                progressFill.style.transition = 'none';
+                progressFill.style.width = pct + '%';
+                if (pct < 100) progressRaf = requestAnimationFrame(step);
+            };
+            if (isPlaying) progressRaf = requestAnimationFrame(step);
+        };
+
+        const showItem = (idx) => {
+            clearTimeout(timer);
+            cancelAnimationFrame(progressRaf);
+            activeVideoEl?.pause();
+            activeVideoEl = null;
+
+            const item = items[idx];
+            if (!item) return;
+
+            counter.textContent = `${idx + 1} / ${items.length}`;
+            mediaWrap.innerHTML = '';
+
+            // Preload neighbours
+            const mediaArr = items.map(i => i.data);
+            Cache.preloadAround(mediaArr, idx, (med, w) =>
+                med.mediaMetadata?.video ? `${med.baseUrl}=dv` : `${med.baseUrl}=w${w}`);
+
+            if (item.type === 'video') {
+                const vid = document.createElement('video');
+                vid.src = `${item.data.baseUrl}=dv`;
+                vid.autoplay = true;
+                vid.muted = false;
+                vid.playsInline = true;
+                vid.controls = false;
+                vid.className = 'ss-video';
+                mediaWrap.appendChild(vid);
+                activeVideoEl = vid;
+
+                // Progress bar tracks video
+                vid.addEventListener('loadedmetadata', () => {
+                    setProgress(vid.duration * 1000 || 10000);
+                });
+                vid.addEventListener('ended', () => {
+                    cancelAnimationFrame(progressRaf);
+                    progressFill.style.width = '100%';
+                    if (isPlaying) setTimeout(next, 300);
+                });
+                vid.addEventListener('error', () => setTimeout(next, 1000));
+                vid.play().catch(() => { });
+
+            } else {
+                const img = document.createElement('img');
+                img.src = Gallery.getImageURL(item.data, 1080);
+                img.alt = item.data.filename || 'Photo';
+                img.className = 'ss-image';
+                img.draggable = false;
+                img.decoding = 'async';
+                mediaWrap.appendChild(img);
+
+                setProgress(imageDuration);
+                if (isPlaying) {
+                    timer = setTimeout(next, imageDuration);
+                }
+            }
+        };
+
+        const next = () => { currentIdx = (currentIdx + 1) % items.length; showItem(currentIdx); };
+        const prev = () => { currentIdx = (currentIdx - 1 + items.length) % items.length; showItem(currentIdx); };
+
+        overlay.querySelector('#ss-prev').onclick = () => { prev(); };
+        overlay.querySelector('#ss-next').onclick = () => { next(); };
+
+        playBtn.onclick = () => {
+            isPlaying = !isPlaying;
+            playBtn.innerHTML = isPlaying ? '&#9646;&#9646;' : '&#9654;';
+            if (isPlaying) {
+                // Resume
+                const item = items[currentIdx];
+                if (item?.type === 'video') {
+                    activeVideoEl?.play();
+                } else {
+                    progressStart = performance.now() - (parseFloat(progressFill.style.width) / 100) * imageDuration;
+                    const step = (now) => {
+                        const elapsed = now - progressStart;
+                        const pct = Math.min(100, (elapsed / imageDuration) * 100);
+                        progressFill.style.width = pct + '%';
+                        if (pct < 100) progressRaf = requestAnimationFrame(step);
+                    };
+                    progressRaf = requestAnimationFrame(step);
+                    timer = setTimeout(next, imageDuration - (parseFloat(progressFill.style.width) / 100) * imageDuration);
+                }
+            } else {
+                // Pause
+                cancelAnimationFrame(progressRaf);
+                clearTimeout(timer);
+                activeVideoEl?.pause();
+            }
+        };
+
+        // Timer option buttons
+        overlay.querySelectorAll('.ss-timer-btn').forEach(btn => {
+            btn.onclick = () => {
+                const dur = parseInt(btn.textContent) * 1000;
+                imageDuration = dur;
+                localStorage.setItem(STORAGE_KEY_DUR, String(dur));
+                overlay.querySelectorAll('.ss-timer-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                // If current is image, restart timer with new duration
+                const item = items[currentIdx];
+                if (item?.type !== 'video' && isPlaying) {
+                    clearTimeout(timer);
+                    setProgress(dur);
+                    timer = setTimeout(next, dur);
+                }
+            };
+        });
+
+        // Touch swipe support (mobile)
+        let touchStartX = 0, touchStartY = 0;
+        overlay.addEventListener('touchstart', e => { touchStartX = e.touches[0].clientX; touchStartY = e.touches[0].clientY; }, { passive: true });
+        overlay.addEventListener('touchend', e => {
+            const dx = e.changedTouches[0].clientX - touchStartX;
+            const dy = Math.abs(e.changedTouches[0].clientY - touchStartY);
+            if (dy > 60) return; // vertical swipe = ignore
+            if (dx < -40) next();
+            else if (dx > 40) prev();
+        }, { passive: true });
+
+        showItem(currentIdx);
     },
 
     // ── Prefetch next N media items — adaptatif selon la connexion ──

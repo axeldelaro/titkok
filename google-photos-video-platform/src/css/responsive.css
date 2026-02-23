@@ -499,4 +499,97 @@
     .sidebar-link {
         min-height: 44px;
     }
+
+    /* Photo grid: always show overlay on touch devices */
+    .photo-grid-overlay {
+        background: rgba(0, 0, 0, 0.18);
+        pointer-events: auto;
+    }
+
+    .photo-grid-edit-btn {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* ─── Slideshow mobile rules ──────────────────────────────────────────────── */
+@media (max-width: 768px) {
+
+    /* Slideshow: thicker progress bar for visibility */
+    .slideshow-progress-bar {
+        height: 4px;
+    }
+
+    /* Controls: allow horizontal scroll without wrapping */
+    .slideshow-controls {
+        gap: 6px;
+        padding: 8px 8px;
+        justify-content: flex-start;
+        /* left-align so scroll is natural */
+        padding-bottom: max(10px, env(safe-area-inset-bottom));
+    }
+
+    /* Timer buttons: slightly smaller on mobile */
+    .ss-timer-btn {
+        padding: 3px 8px;
+        font-size: 0.72rem;
+        min-height: 30px;
+    }
+
+    /* Floating slideshow btn: shift above bottom nav */
+    .slideshow-float-btn {
+        top: auto;
+        bottom: 80px;
+        right: 16px;
+        width: 50px;
+        height: 50px;
+        font-size: 1.3rem;
+    }
+
+    /* View-toggle: also move above bottom nav */
+    .view-toggle-btn {
+        top: auto;
+        bottom: 140px;
+        right: 16px;
+        width: 46px;
+        height: 46px;
+    }
+
+    /* Photo grid: 3 columns on phone too (Instagram-style) */
+    .photo-grid {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1.5px;
+    }
+
+    /* gallery-view-container accounts for bottom nav */
+    .gallery-view-container {
+        bottom: 0;
+    }
+
+    /* Slideshow counter: move inside safe zone */
+    .slideshow-counter {
+        top: max(12px, env(safe-area-inset-top, 12px));
+    }
+}
+
+@media (max-width: 480px) {
+
+    /* Very small: 2-column photo grid */
+    .photo-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1.5px;
+    }
+
+    /* Slideshow prev/next smaller on tiny screens */
+    #ss-prev,
+    #ss-next {
+        font-size: 1.6rem;
+        min-width: 40px;
+        min-height: 40px;
+    }
+
+    /* Hide timer label text, keep buttons */
+    .ss-timer-label {
+        display: none;
+    }
 }
