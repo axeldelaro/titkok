@@ -1985,10 +1985,10 @@ const UI = {
                     <div class="ss-timer-wrap" id="ss-timer-section">
                         <span class="ss-timer-label">⏱ Timer</span>
                         <div class="ss-timer-options">
-                            <button class="ss-timer-btn${imageDuration === 3000 ? ' active' : ''}">3s</button>
+                            <button class="ss-timer-btn${imageDuration === 200 ? ' active' : ''}">0.2s</button>
+                            <button class="ss-timer-btn${imageDuration === 500 ? ' active' : ''}">0.5s</button>
+                            <button class="ss-timer-btn${imageDuration === 1000 ? ' active' : ''}">1s</button>
                             <button class="ss-timer-btn${imageDuration === 5000 ? ' active' : ''}">5s</button>
-                            <button class="ss-timer-btn${imageDuration === 8000 ? ' active' : ''}">8s</button>
-                            <button class="ss-timer-btn${imageDuration === 15000 ? ' active' : ''}">15s</button>
                         </div>
                     </div>
                     <div class="ss-timer-wrap">
