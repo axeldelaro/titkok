@@ -18,6 +18,7 @@ import FaceEditor from './face-editor.js';
 import Cache from './cache.js';
 import MediaStats from './mediaStats.js';
 import { ALL_NAV_ITEMS, getVisibleItems, setVisibleItems } from '../components/sidebar.js';
+import { compressAll, buildQualitySelector, getQuality, QUALITY_PRESETS } from './compressor.js';
 
 const UI = {
     init: () => {
@@ -798,6 +799,44 @@ const UI = {
         };
         container.appendChild(shuffleBtn);
 
+        // ── #100 Random Chaos button ──
+        const CHAOS_EFFECTS = [
+            'chaos-hue',
+            'chaos-invert',
+            'chaos-saturate',
+            'chaos-sepia',
+            'chaos-neon',
+            'chaos-cool',
+            'chaos-warm',
+            'chaos-dark',
+            'chaos-fade',
+            'chaos-duotone',
+            'chaos-glitch',
+            'chaos-mono',
+        ];
+        let chaosActive = false;
+        const chaosBtn = document.createElement('button');
+        chaosBtn.className = 'mix-chaos-btn';
+        chaosBtn.innerHTML = '🎲';
+        chaosBtn.title = 'Random Chaos';
+        const applyChaos = () => {
+            feed.querySelectorAll('.video-card-feed').forEach(card => {
+                // Remove previous chaos
+                card.classList.forEach(cls => { if (cls.startsWith('chaos-')) card.classList.remove(cls); });
+                if (chaosActive) {
+                    const eff = CHAOS_EFFECTS[Math.floor(Math.random() * CHAOS_EFFECTS.length)];
+                    card.classList.add(eff);
+                }
+            });
+        };
+        chaosBtn.onclick = () => {
+            chaosActive = !chaosActive;
+            chaosBtn.classList.toggle('active', chaosActive);
+            applyChaos();
+            Toast.show(chaosActive ? '🎲 Chaos activé !' : '🎲 Chaos désactivé', chaosActive ? 'success' : 'info');
+        };
+        container.appendChild(chaosBtn);
+
         // ── Slideshow button ──
         const slideshowBtn = document.createElement('button');
         slideshowBtn.className = 'slideshow-float-btn';
@@ -946,6 +985,11 @@ const UI = {
             card.appendChild(playerContainer);
             card.appendChild(infoOverlay);
             card.appendChild(actions);
+            // Apply chaos if active
+            if (chaosActive) {
+                const eff = CHAOS_EFFECTS[Math.floor(Math.random() * CHAOS_EFFECTS.length)];
+                card.classList.add(eff);
+            }
             return card;
         };
 
@@ -984,6 +1028,11 @@ const UI = {
             actions.querySelector('.edit-btn').onclick = (e) => { e.stopPropagation(); FaceEditor.open(image); };
             card.appendChild(actions);
 
+            // Apply chaos if active
+            if (chaosActive) {
+                const eff = CHAOS_EFFECTS[Math.floor(Math.random() * CHAOS_EFFECTS.length)];
+                card.classList.add(eff);
+            }
             return card; // image cards have no _player
         };
 
@@ -1121,11 +1170,68 @@ const UI = {
         const handleUpload = async (files) => {
             if (files.length === 0) return;
 
+            // ── #83 COMPRESSION: show quality selection modal before uploading ──
+            const imageFiles = files.filter(f => f.type.startsWith('image/'));
+            const otherFiles = files.filter(f => !f.type.startsWith('image/'));
+            let filesToUpload = [...otherFiles];
+
+            if (imageFiles.length > 0) {
+                // Show compression modal
+                await new Promise((resolve) => {
+                    const overlay = document.createElement('div');
+                    overlay.className = 'compression-modal-overlay';
+                    overlay.innerHTML = `
+                        <div class="compression-modal">
+                            <h3>📦 Compression</h3>
+                            <p class="comp-subtitle">${imageFiles.length} image${imageFiles.length > 1 ? 's' : ''} sélectionnée${imageFiles.length > 1 ? 's' : ''}</p>
+                        </div>
+                    `;
+                    const modal = overlay.querySelector('.compression-modal');
+                    const selector = buildQualitySelector();
+                    modal.appendChild(selector);
+
+                    // Size preview
+                    const totalBytes = imageFiles.reduce((a, f) => a + f.size, 0);
+                    const preview = document.createElement('div');
+                    preview.className = 'comp-preview';
+                    const updatePreview = () => {
+                        const preset = QUALITY_PRESETS[getQuality()];
+                        const ratio = getQuality() === 'HQ' ? 0.75 : getQuality() === 'Normal' ? 0.45 : 0.22;
+                        const est = Math.round(totalBytes * ratio);
+                        const fmt = (b) => b > 1024 * 1024 ? (b / (1024 * 1024)).toFixed(1) + 'MB' : Math.round(b / 1024) + 'KB';
+                        preview.innerHTML = `<span>Original: <b>${fmt(totalBytes)}</b></span><span>→ ~<b>${fmt(est)}</b> ${preset.label}</span>`;
+                    };
+                    updatePreview();
+                    selector.querySelectorAll('.uq-btn').forEach(b => { const orig = b.onclick; b.onclick = (e) => { orig && orig(e); updatePreview(); }; });
+                    modal.appendChild(preview);
+
+                    const confirmBtn = document.createElement('button');
+                    confirmBtn.className = 'comp-confirm-btn';
+                    confirmBtn.textContent = '✅ Uploader';
+                    confirmBtn.onclick = () => { overlay.remove(); resolve(); };
+                    modal.appendChild(confirmBtn);
+
+                    overlay.addEventListener('click', (e) => { if (e.target === overlay) { overlay.remove(); resolve(); } });
+                    document.body.appendChild(overlay);
+                });
+
+                // Compress
+                Toast.show(`🗜️ Compression ${QUALITY_PRESETS[getQuality()].label}...`, 'info', 3000);
+                const compressed = await compressAll(imageFiles, (done, total) => {
+                    if (done < total) Toast.show(`🗜️ ${done}/${total} compressée${done > 1 ? 's' : ''}...`, 'info', 1500);
+                });
+                filesToUpload = [...compressed, ...otherFiles];
+
+                const origMB = (imageFiles.reduce((a, f) => a + f.size, 0) / 1024 / 1024).toFixed(1);
+                const newMB = (compressed.reduce((a, f) => a + f.size, 0) / 1024 / 1024).toFixed(1);
+                Toast.show(`✅ Compressé : ${origMB}MB → ${newMB}MB`, 'success', 3000);
+            }
+
             // ── INSTANT LOCAL PREVIEW ──
-            Gallery.addLocalImages(files);
+            Gallery.addLocalImages(filesToUpload);
 
             // Re-render to show them NOW
-            Toast.show(`${files.length} image${files.length > 1 ? 's' : ''} ready! Uploading to Google Photos...`, 'info', 4000);
+            Toast.show(`${filesToUpload.length} image${filesToUpload.length > 1 ? 's' : ''} ready! Uploading to Google Photos...`, 'info', 4000);
             const isOnGallery = window.location.hash === '#/gallery';
             if (isOnGallery) {
                 const contentEl = document.getElementById('content');
@@ -1136,7 +1242,7 @@ const UI = {
             let successCount = 0;
             let failCount = 0;
 
-            await Gallery.uploadImages(files, {
+            await Gallery.uploadImages(filesToUpload, {
                 onFileStart: (file, idx, total) => {
                     Toast.show(`📤 Uploading ${idx + 1}/${total}: ${file.name}`, 'info', 3000);
                 },
@@ -1151,7 +1257,7 @@ const UI = {
 
             // Summary
             if (successCount > 0) {
-                Toast.show(`✅ ${successCount}/${files.length} uploaded to Google Photos!`, 'success');
+                Toast.show(`✅ ${successCount}/${filesToUpload.length} uploaded to Google Photos!`, 'success');
             }
 
             // Cleanup: after uploads finish, re-fetch to get real URLs

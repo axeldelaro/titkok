@@ -4123,3 +4123,245 @@
     background: rgba(234, 67, 53, 0.4);
     border-color: rgba(234, 67, 53, 0.8);
 }
+
+/* ══════════════════════════════════════════════════════
+   #100 — Mix Random Chaos Button + Effects
+   ══════════════════════════════════════════════════════ */
+.mix-chaos-btn {
+    position: fixed;
+    top: 70px;
+    right: 12px;
+    z-index: 30;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    background: rgba(20, 20, 30, 0.55);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    color: white;
+    font-size: 1.5rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 16px rgba(0, 0, 0, 0.5);
+    transition: transform 0.2s, background 0.25s, border-color 0.25s;
+}
+
+.mix-chaos-btn:active {
+    transform: scale(0.9);
+}
+
+.mix-chaos-btn.active {
+    background: rgba(139, 0, 255, 0.45);
+    border-color: rgba(180, 80, 255, 0.9);
+    box-shadow: 0 0 18px rgba(180, 80, 255, 0.6);
+    animation: chaosButtonPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes chaosButtonPulse {
+
+    0%,
+    100% {
+        box-shadow: 0 0 18px rgba(180, 80, 255, 0.6);
+    }
+
+    50% {
+        box-shadow: 0 0 32px rgba(255, 80, 255, 0.9);
+    }
+}
+
+/* ── Chaos CSS filter classes (applied per card) ── */
+.chaos-hue {
+    filter: hue-rotate(120deg) saturate(1.6) !important;
+    transition: filter 0.4s ease;
+}
+
+.chaos-invert {
+    filter: invert(0.85) hue-rotate(180deg) !important;
+    transition: filter 0.4s ease;
+}
+
+.chaos-saturate {
+    filter: saturate(3.5) contrast(1.2) !important;
+    transition: filter 0.4s ease;
+}
+
+.chaos-sepia {
+    filter: sepia(0.9) contrast(1.3) saturate(1.5) !important;
+    transition: filter 0.4s ease;
+}
+
+.chaos-neon {
+    filter: saturate(4) brightness(1.3) contrast(1.5) hue-rotate(30deg) !important;
+    transition: filter 0.4s ease;
+}
+
+.chaos-cool {
+    filter: hue-rotate(200deg) saturate(1.4) brightness(1.1) !important;
+    transition: filter 0.4s ease;
+}
+
+.chaos-warm {
+    filter: hue-rotate(-20deg) saturate(1.6) sepia(0.3) brightness(1.05) !important;
+    transition: filter 0.4s ease;
+}
+
+.chaos-dark {
+    filter: brightness(0.45) contrast(1.8) saturate(1.4) !important;
+    transition: filter 0.4s ease;
+}
+
+.chaos-fade {
+    filter: contrast(0.55) brightness(1.4) saturate(0.4) !important;
+    transition: filter 0.4s ease;
+}
+
+.chaos-duotone {
+    filter: grayscale(0.6) sepia(0.7) hue-rotate(280deg) saturate(2) !important;
+    transition: filter 0.4s ease;
+}
+
+.chaos-glitch {
+    filter: invert(0.15) hue-rotate(60deg) contrast(1.6) saturate(2.5) !important;
+    transition: filter 0.4s ease;
+}
+
+.chaos-mono {
+    filter: grayscale(1) contrast(1.5) brightness(0.9) !important;
+    transition: filter 0.4s ease;
+}
+
+/* ══════════════════════════════════════════════════════
+   #83 — Compression Modal
+   ══════════════════════════════════════════════════════ */
+.compression-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    z-index: 3000;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding-bottom: env(safe-area-inset-bottom, 0);
+    animation: compModalIn 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes compModalIn {
+    from {
+        opacity: 0;
+        transform: translateY(40px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.compression-modal {
+    background: linear-gradient(160deg, #1a1a2e 0%, #16213e 60%, #0f3460 100%);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-bottom: none;
+    border-radius: 24px 24px 0 0;
+    padding: 1.5rem 1.5rem calc(1.5rem + env(safe-area-inset-bottom, 0));
+    width: 100%;
+    max-width: 480px;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.compression-modal h3 {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: #fff;
+    text-align: center;
+    margin: 0;
+}
+
+.comp-subtitle {
+    font-size: 0.85rem;
+    color: rgba(255, 255, 255, 0.55);
+    text-align: center;
+    margin: -0.5rem 0 0;
+}
+
+/* Quality selector pill buttons */
+.upload-quality-selector {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.uq-label {
+    font-size: 0.8rem;
+    color: rgba(255, 255, 255, 0.55);
+    flex-shrink: 0;
+}
+
+.uq-btn {
+    padding: 0.45rem 1.1rem;
+    border-radius: 999px;
+    border: 1.5px solid rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.06);
+    color: rgba(255, 255, 255, 0.75);
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: background 0.2s, border-color 0.2s, color 0.2s, transform 0.1s;
+    white-space: nowrap;
+}
+
+.uq-btn:active {
+    transform: scale(0.95);
+}
+
+.uq-btn.active {
+    background: rgba(100, 149, 237, 0.35);
+    border-color: cornflowerblue;
+    color: #fff;
+    font-weight: 600;
+    box-shadow: 0 0 10px rgba(100, 149, 237, 0.4);
+}
+
+/* Size estimate preview row */
+.comp-preview {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 10px;
+    padding: 0.65rem 1rem;
+    font-size: 0.88rem;
+    color: rgba(255, 255, 255, 0.8);
+    gap: 0.5rem;
+}
+
+.comp-preview b {
+    color: #fff;
+}
+
+/* Confirm button */
+.comp-confirm-btn {
+    width: 100%;
+    padding: 0.85rem;
+    border-radius: 14px;
+    border: none;
+    background: linear-gradient(135deg, #6c63ff, #48cae4);
+    color: #fff;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.15s;
+    letter-spacing: 0.02em;
+}
+
+.comp-confirm-btn:active {
+    opacity: 0.85;
+    transform: scale(0.98);
+}
