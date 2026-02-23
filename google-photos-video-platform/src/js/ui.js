@@ -2029,6 +2029,15 @@ const UI = {
         const playBtn = overlay.querySelector('#ss-play');
         const timerSection = overlay.querySelector('#ss-timer-section');
 
+        // Manual screen-tap navigation
+        mediaWrap.onclick = (e) => {
+            // ignore if clicking on controls or progress bar
+            if (e.target.closest('.ss-btn') || e.target.closest('.slideshow-controls')) return;
+            const rect = mediaWrap.getBoundingClientRect();
+            if (e.clientX < rect.width / 3) prev();
+            else next();
+        };
+
         // Feature 44: surprise mode hides timer and counter
         const applySurprise = () => {
             timerSection.style.display = surpriseMode ? 'none' : '';
@@ -2076,8 +2085,25 @@ const UI = {
         const showItem = (idx, skipTransition = false) => {
             clearTimeout(timer);
             cancelAnimationFrame(progressRaf);
-            const oldWrap = mediaWrap.firstChild;
-            if (oldWrap && !skipTransition) applyTransitionOut(oldWrap);
+
+            // FORCE CLEAN DOM: keep at most the last one to transition out
+            const wraps = mediaWrap.querySelectorAll('.slideshow-media-wrap');
+            wraps.forEach((w, i) => {
+                if (i < wraps.length - 1) w.remove();
+            });
+            const oldWrap = mediaWrap.lastChild;
+
+            const isVeryFast = imageDuration <= 500;
+            const transDuration = isVeryFast ? 0 : 350;
+
+            if (oldWrap) {
+                if (!skipTransition && !isVeryFast) {
+                    applyTransitionOut(oldWrap);
+                    setTimeout(() => { try { oldWrap.remove(); } catch { } }, transDuration);
+                } else {
+                    oldWrap.remove();
+                }
+            }
 
             activeVideoEl?.pause();
             activeVideoEl = null;
@@ -2127,10 +2153,8 @@ const UI = {
                 if (isPlaying) timer = setTimeout(next, imageDuration);
             }
 
-            if (!skipTransition) applyTransitionIn(newWrap);
+            if (!skipTransition && !isVeryFast) applyTransitionIn(newWrap);
             const mediaArea = overlay.querySelector('.slideshow-media-area');
-            // Remove old after transition
-            if (oldWrap) setTimeout(() => { try { oldWrap.remove(); } catch { } }, 350);
             mediaArea.insertBefore(newWrap, mediaArea.querySelector('.slideshow-progress-bar'));
         };
 
@@ -2177,7 +2201,7 @@ const UI = {
                 return;
             }
             btn.onclick = () => {
-                const dur = parseInt(btn.textContent) * 1000;
+                const dur = parseFloat(btn.textContent) * 1000;
                 imageDuration = dur;
                 localStorage.setItem(STORAGE_KEY_DUR, String(dur));
                 overlay.querySelectorAll('.ss-timer-btn:not([data-trans]):not([data-fi])').forEach(b => b.classList.remove('active'));
