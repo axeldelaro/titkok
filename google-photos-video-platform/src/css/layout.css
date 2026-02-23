@@ -3876,3 +3876,252 @@
     background: rgba(255, 255, 255, 0.15);
     color: #fff;
 }
+
+/* --- New Profile Settings Tab --- */
+.profile-tabs {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 2rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.profile-tab {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 1.1rem;
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: color 0.2s, border-color 0.2s;
+}
+
+.profile-tab.active {
+    color: var(--primary-color);
+    border-bottom-color: var(--primary-color);
+}
+
+.settings-container {
+    animation: fadeIn 0.3s ease;
+}
+
+.settings-title {
+    font-size: 1.2rem;
+    margin-bottom: 0.5rem;
+}
+
+.settings-desc {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    margin-bottom: 1.5rem;
+}
+
+.settings-section-sep {
+    height: 1px;
+    background: var(--border-color);
+    margin: 2rem 0;
+}
+
+.settings-nav-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.settings-nav-item {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem;
+    background: var(--surface-color);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: border-color 0.2s, background 0.2s;
+}
+
+.settings-nav-item.enabled {
+    border-color: var(--primary-color);
+    background: rgba(255, 64, 129, 0.1);
+}
+
+.settings-nav-icon {
+    font-size: 1.5rem;
+}
+
+.settings-nav-label {
+    flex: 1;
+    font-weight: 500;
+}
+
+.settings-nav-item input[type="checkbox"] {
+    display: none;
+}
+
+.settings-nav-check {
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+    border: 2px solid var(--border-color);
+    position: relative;
+    transition: all 0.2s;
+}
+
+.settings-nav-item.enabled .settings-nav-check {
+    background: var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+.settings-nav-item.enabled .settings-nav-check::after {
+    content: '';
+    position: absolute;
+    left: 6px;
+    top: 2px;
+    width: 4px;
+    height: 10px;
+    border: solid white;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+
+.settings-nav-item:has(input:disabled) {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* --- Speed Popup --- */
+.feed-speed-popup {
+    position: absolute;
+    bottom: 80px;
+    right: 20px;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(10px);
+    border-radius: var(--radius-md);
+    padding: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    z-index: 50;
+    animation: fadeIn 0.2s ease;
+    border: 1px solid var(--border-color);
+}
+
+.speed-opt {
+    background: transparent;
+    border: none;
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    text-align: right;
+    font-size: 0.9rem;
+}
+
+.speed-opt:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.speed-opt.active {
+    color: var(--primary-color);
+    font-weight: bold;
+}
+
+/* --- Grid Date Headers --- */
+.photo-grid-date-header {
+    width: 100%;
+    font-size: 1.2rem;
+    font-weight: bold;
+    padding: 1.5rem 0.5rem 0.5rem;
+    color: var(--text-color);
+    letter-spacing: 0.5px;
+}
+
+/* --- Slideshow Transitions --- */
+.ss-trans-out-fade {
+    opacity: 0;
+    transition: opacity 0.35s ease-out;
+}
+
+.ss-trans-in-fade {
+    animation: ssFadeIn 0.35s ease-in;
+}
+
+@keyframes ssFadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+.ss-trans-out-slide {
+    transform: translateX(-100%);
+    transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.ss-trans-in-slide {
+    animation: ssSlideIn 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes ssSlideIn {
+    from {
+        transform: translateX(100%);
+    }
+
+    to {
+        transform: translateX(0);
+    }
+}
+
+.ss-trans-out-zoom {
+    opacity: 0;
+    transform: scale(1.1);
+    transition: all 0.4s ease-out;
+}
+
+.ss-trans-in-zoom {
+    animation: ssZoomIn 0.4s ease-out;
+}
+
+@keyframes ssZoomIn {
+    from {
+        opacity: 0;
+        transform: scale(0.9);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.ss-trans-out-flip {
+    transform: rotateY(-90deg);
+    transition: transform 0.35s ease-in;
+}
+
+.ss-trans-in-flip {
+    animation: ssFlipIn 0.35s ease-out;
+}
+
+@keyframes ssFlipIn {
+    from {
+        transform: rotateY(90deg);
+    }
+
+    to {
+        transform: rotateY(0deg);
+    }
+}
+
+/* Surprise Button */
+.ss-surprise-btn {
+    font-size: 1.3rem;
+}
+
+.ss-surprise-btn.active {
+    background: rgba(234, 67, 53, 0.4);
+    border-color: rgba(234, 67, 53, 0.8);
+}
