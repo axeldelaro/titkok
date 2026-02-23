@@ -9,10 +9,14 @@ let hypnoActive = false;
 let hypnoTimers = [];
 let activePopups = new Set();
 let overlayContainer = null;
-const MAX_POPUPS = 25;
-
 // Load config from localStorage or default
 const DEFAULT_CONFIG = {
+    // ── Popups ──
+    popupsEnabled: true,
+    popupDensity: 25,
+    popupSize: 1.0,
+    popupSpeed: 1.0,
+
     // ── Visual / Chill ──
     scanlines: true,
     rgbShift: true,
@@ -430,7 +434,12 @@ function spawnPopup() {
         return;
     }
 
-    if (activePopups.size >= MAX_POPUPS) {
+    if (!config.popupsEnabled) {
+        scheduleSpawn(1000);
+        return;
+    }
+
+    if (activePopups.size >= config.popupDensity) {
         const first = activePopups.values().next().value;
         if (first) {
             first.remove();
@@ -450,7 +459,8 @@ function spawnPopup() {
 
     const maxW = window.innerWidth;
     const maxH = window.innerHeight;
-    const size = Math.min(100 + Math.random() * 250, maxW - 20);
+    const baseSize = Math.min(100 + Math.random() * 250, maxW - 20);
+    const size = baseSize * (config.popupSize || 1.0);
     const x = Math.max(10, Math.min(Math.random() * (maxW - size), maxW - size - 10));
     const y = Math.max(10, Math.min(Math.random() * (maxH - size), maxH - size - 10));
 
@@ -477,7 +487,8 @@ function spawnPopup() {
 
     overlayContainer.appendChild(popup);
     activePopups.add(popup);
-    scheduleSpawn(100 + Math.random() * 400);
+    const speedMult = config.popupSpeed || 1.0;
+    scheduleSpawn((100 + Math.random() * 400) / speedMult);
 }
 
 const HypnoPopups = {

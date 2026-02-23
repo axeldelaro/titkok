@@ -1558,6 +1558,69 @@ const UI = {
                     const container = document.createElement('div');
                     container.style.padding = '10px';
 
+                    // --- Popup settings ---
+                    const popupsWrapper = document.createElement('div');
+                    popupsWrapper.innerHTML = `
+                        <h3 style="color:var(--text-secondary);font-size:0.85rem;margin:18px 0 10px;text-transform:uppercase;letter-spacing:1.5px;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:6px;">
+                            Popups & Images 🖼️
+                        </h3>
+                        <div style="display:flex; flex-direction:column; gap:16px; margin-bottom: 24px;">
+                            <label style="display:flex; align-items:center; justify-content:space-between; color:#fff;">
+                                <span style="font-weight:bold;">Enable Image Popups</span>
+                                <label class="hypno-toggle-switch" style="margin:0;">
+                                    <input type="checkbox" id="hypno-popups-enabled" ${config.popupsEnabled ? 'checked' : ''}>
+                                    <span class="hypno-slider"></span>
+                                </label>
+                            </label>
+                            
+                            <label style="display:flex; flex-direction:column; gap:8px; color:#fff; font-size:0.9rem;">
+                                <div style="display:flex; justify-content:space-between;">
+                                    <span>Density (Max Images)</span>
+                                    <span id="hypno-density-val" style="color:var(--primary-color); font-weight:bold;">${config.popupDensity}</span>
+                                </div>
+                                <input type="range" id="hypno-density" min="5" max="100" value="${config.popupDensity}" style="accent-color:var(--primary-color)">
+                            </label>
+                            
+                            <label style="display:flex; flex-direction:column; gap:8px; color:#fff; font-size:0.9rem;">
+                                <div style="display:flex; justify-content:space-between;">
+                                    <span>Scale / Size Multiplier</span>
+                                    <span id="hypno-size-val" style="color:var(--primary-color); font-weight:bold;">${config.popupSize}x</span>
+                                </div>
+                                <input type="range" id="hypno-size" min="0.1" max="3" step="0.1" value="${config.popupSize}" style="accent-color:var(--primary-color)">
+                            </label>
+                            
+                            <label style="display:flex; flex-direction:column; gap:8px; color:#fff; font-size:0.9rem;">
+                                <div style="display:flex; justify-content:space-between;">
+                                    <span>Spawn Speed Multiplier</span>
+                                    <span id="hypno-speed-val" style="color:var(--primary-color); font-weight:bold;">${config.popupSpeed}x</span>
+                                </div>
+                                <input type="range" id="hypno-speed" min="0.1" max="5" step="0.1" value="${config.popupSpeed}" style="accent-color:var(--primary-color)">
+                            </label>
+                        </div>
+                    `;
+                    container.appendChild(popupsWrapper);
+
+                    // Bind events for popup settings
+                    setTimeout(() => {
+                        const enToggle = document.getElementById('hypno-popups-enabled');
+                        if (enToggle) enToggle.onchange = (e) => updateConfig({ popupsEnabled: e.target.checked });
+
+                        const attachSlider = (id, key, suffix) => {
+                            const el = document.getElementById(id);
+                            const valEl = document.getElementById(id + '-val');
+                            if (el && valEl) {
+                                el.oninput = (e) => {
+                                    const v = parseFloat(e.target.value);
+                                    valEl.textContent = v + suffix;
+                                    updateConfig({ [key]: v });
+                                };
+                            }
+                        };
+                        attachSlider('hypno-density', 'popupDensity', '');
+                        attachSlider('hypno-size', 'popupSize', 'x');
+                        attachSlider('hypno-speed', 'popupSpeed', 'x');
+                    }, 0);
+
                     // Effect definitions with icons, descriptions, and preview CSS — 46 effects in 5 categories
                     const effects = {
                         'Visual / Chill 👁️': [
@@ -1954,7 +2017,7 @@ const UI = {
         const STORAGE_KEY_DUR = 'slideshowImageDuration';
         const STORAGE_KEY_TRANS = 'slideshowTransition';
         const STORAGE_KEY_SURPRISE = 'slideshowSurprise';
-        let imageDuration = parseInt(localStorage.getItem(STORAGE_KEY_DUR) || '5000', 10);
+        let imageDuration = parseInt(localStorage.getItem(STORAGE_KEY_DUR) || '2000', 10);
         let transition = localStorage.getItem(STORAGE_KEY_TRANS) || 'fade';
         let surpriseMode = localStorage.getItem(STORAGE_KEY_SURPRISE) === 'true';
         // Feature 26: live photo filters
@@ -1985,10 +2048,9 @@ const UI = {
                     <div class="ss-timer-wrap" id="ss-timer-section">
                         <span class="ss-timer-label">⏱ Timer</span>
                         <div class="ss-timer-options">
-                            <button class="ss-timer-btn${imageDuration === 200 ? ' active' : ''}">0.2s</button>
-                            <button class="ss-timer-btn${imageDuration === 500 ? ' active' : ''}">0.5s</button>
                             <button class="ss-timer-btn${imageDuration === 1000 ? ' active' : ''}">1s</button>
-                            <button class="ss-timer-btn${imageDuration === 5000 ? ' active' : ''}">5s</button>
+                            <button class="ss-timer-btn${imageDuration === 2000 ? ' active' : ''}">2s</button>
+                            <button class="ss-timer-btn${imageDuration === 3000 ? ' active' : ''}">3s</button>
                         </div>
                     </div>
                     <div class="ss-timer-wrap">
@@ -2154,8 +2216,7 @@ const UI = {
             }
 
             if (!skipTransition && !isVeryFast) applyTransitionIn(newWrap);
-            const mediaArea = overlay.querySelector('.slideshow-media-area');
-            mediaArea.insertBefore(newWrap, mediaArea.querySelector('.slideshow-progress-bar'));
+            mediaWrap.appendChild(newWrap);
         };
 
         const next = () => { currentIdx = (currentIdx + 1) % items.length; showItem(currentIdx); };

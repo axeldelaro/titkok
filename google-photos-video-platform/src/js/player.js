@@ -29,19 +29,10 @@ export default class Player {
         this._filterIndex = parseInt(localStorage.getItem('playerFilterIndex') || '0', 10);
         if (this._filterIndex >= this._filters.length) this._filterIndex = 0;
 
-        // ── Motion Trail strength ─────────────────────────────────────
-        // 0.0 (slider left)  → 0 clones active, purely normal video
-        // 1.0 (slider right) → 12 clones active, spaced out, long heavy trail
-        this._trailStrength = 1.0;
-        localStorage.setItem('trailStrength', '1');
-
         // ── Zoom / Cinema ─────────────────────────────────────────────
         this._zoomLevel = 1;
         this._panX = 0;
         this._panY = 0;
-
-        // ── Trail synchronization ─────────────────────────────────────
-        this._trailSyncInterval = null;
 
         this.init();
     }
@@ -52,32 +43,7 @@ export default class Player {
         this.container.className = 'player-wrapper';
         this.container.style.backgroundColor = '#000';
 
-        // 1. Trail Videos (Background clones)
-        for (let i = 0; i < this.numClones; i++) {
-            const clone = document.createElement('video');
-            clone.muted = true;
-            clone.playsInline = true;
-            clone.controls = false;
-            clone.loop = true;
-            clone.setAttribute('playsinline', '');
-            clone.setAttribute('webkit-playsinline', '');
-            clone.setAttribute('muted', '');
-            clone.style.cssText = [
-                'position:absolute', 'inset:0',
-                'width:100%', 'height:100%',
-                'object-fit:contain',
-                'pointer-events:none',
-                'z-index:1',
-                'opacity:0', // Dynamically updated by slider
-                'transition:opacity 0.2s',
-                // Default blend mode for glowing effect
-                'mix-blend-mode:screen'
-            ].join(';');
-            this.trailVideos.push(clone);
-            this.container.appendChild(clone);
-        }
-
-        // 2. Main Video (Foreground)
+        // Main Video
         this.video = document.createElement('video');
         this.video.poster = this.isBlob ? '' : `${this.posterUrl}=w1920-h1080`;
         this.video.muted = true;
@@ -93,7 +59,6 @@ export default class Player {
             'object-fit:contain',
             'z-index:2',
             'touch-action:pan-y',
-            'opacity:0.85', // Semi-transparent to let trail bleed through
             'transition:opacity 0.2s',
         ].join(';');
         this.container.appendChild(this.video);
@@ -129,15 +94,10 @@ export default class Player {
                     <div class="progress-fill"></div>
                 </div>
             </div>
-            <div class="trail-row" style="display:flex;align-items:center;gap:0.5rem;padding:0 0.25rem 0.25rem">
-                <span style="font-size:0.75rem;white-space:nowrap;opacity:0.8">👻 Traînée</span>
-                <input type="range" min="0" max="1" step="0.01" class="trail-slider" style="flex:1;accent-color:var(--primary-color,#ff4081);">
-                <span class="trail-label" style="font-size:0.75rem;min-width:2.5em;text-align:right;opacity:0.8"></span>
-            </div>
-            <div class="controls-row">
-                <button class="play-btn"            title="Play (Space)">▶</button>
+            <div class="controls-row" style="margin-top: 0.5rem;">
+                <button class="play-btn" title="Play (Space)">▶</button>
                 <div class="volume-container">
-                    <button class="mute-btn"        title="Mute (M)">🔇</button>
+                    <button class="mute-btn" title="Mute (M)">🔇</button>
                     <input type="range" min="0" max="1" step="0.05" value="0" class="volume-slider">
                 </div>
                 <span class="time-display">0:00 / 0:00</span>
@@ -192,17 +152,6 @@ export default class Player {
             } else { this.hideLoading(); this.showError(); }
         });
 
-        // Keep the trail videos strictly synced when main video plays
-        this.video.addEventListener('play', () => {
-            this._syncTrailVideo();
-        });
-        this.video.addEventListener('pause', () => {
-            this.trailVideos.forEach(v => v.pause());
-        });
-        this.video.addEventListener('seeked', () => {
-            this._syncTrailVideo();
-        });
-
         this.attachEvents();
         if (!this.lazy) this.startPlayback();
     }
@@ -211,7 +160,6 @@ export default class Player {
         const cssFilter = this._filters[this._filterIndex].css;
         const filterStr = cssFilter === 'none' ? '' : cssFilter;
         this.video.style.filter = filterStr;
-        this.trailVideos.forEach(v => v.style.filter = filterStr);
     }
 
     // ── Overlays ──────────────────────────────────────────────────────
@@ -249,10 +197,8 @@ export default class Player {
                     this.videoUrl = fresh.baseUrl;
                     const fsrc = `${fresh.baseUrl}=dv`;
                     this.video.src = fsrc;
-                    this.trailVideos.forEach(v => v.src = fsrc);
 
                     this.video.load();
-                    this.trailVideos.forEach(v => v.load());
 
                     this.video.play().catch(() => { });
                     return;
@@ -262,10 +208,8 @@ export default class Player {
 
         const fallbackSrc = `${src}&_t=${Date.now()}`;
         this.video.src = fallbackSrc;
-        this.trailVideos.forEach(v => v.src = fallbackSrc);
 
         this.video.load();
-        this.trailVideos.forEach(v => v.load());
 
         this.video.play().catch(() => { });
     }
@@ -277,30 +221,21 @@ export default class Player {
 
         const src = this.isBlob ? this.videoUrl : `${this.videoUrl}=dv`;
         this.video.src = src;
-        this.trailVideos.forEach(v => v.src = src);
 
         this.video.preload = 'auto';
-        this.trailVideos.forEach(v => v.preload = 'auto');
 
         this.video.load();
-        this.trailVideos.forEach(v => v.load());
 
         this.video.play().catch(() => { });
-        this.trailVideos.forEach(v => v.play().catch(() => { }));
-
-        this._updateTrailVisuals();
 
         if (this._loadingTimeout) clearTimeout(this._loadingTimeout);
         this._loadingTimeout = setTimeout(() => { this.hideLoading(); this._loadingTimeout = null; }, 5000);
-
-        this._startSyncLoop();
     }
 
     activate() {
         if (this._started) { this.video.play().catch(() => { }); }
         else if (this._preloaded) { this._started = true; this.hideLoading(); this.video.play().catch(() => { }); }
         else { this.startPlayback(); }
-        this._startSyncLoop();
     }
 
     preload() {
@@ -311,117 +246,15 @@ export default class Player {
 
         const src = this.isBlob ? this.videoUrl : `${this.videoUrl}=dv`;
         this.video.src = src;
-        this.trailVideos.forEach(v => v.src = src);
 
         this.video.preload = 'auto';
-        this.trailVideos.forEach(v => v.preload = 'auto');
 
         this.video.load();
-        this.trailVideos.forEach(v => v.load());
     }
 
     deactivate() {
         this._saveProgress();
         this.video.pause();
-        this.trailVideos.forEach(v => v.pause());
-        this._stopSyncLoop();
-    }
-
-    // ─── MULTI-CLONE TRAIL SYNC ───────────────────────────────────────
-
-    _updateTrailVisuals() {
-        const s = this._trailStrength;
-
-        if (s === 0) {
-            this.video.style.opacity = '1';
-            this.trailVideos.forEach(v => v.style.opacity = '0');
-            return;
-        }
-
-        // As strength increases, main video becomes quite transparent (down to 0.6 at 100%)
-        // This is crucial so the bright clones behind it aren't hidden by the foreground
-        this.video.style.opacity = (0.95 - (s * 0.35)).toString();
-
-        const activeClones = Math.max(1, Math.round(s * this.numClones));
-
-        // Base opacity for the clones is much higher now
-        const baseOpacity = 0.4 + (s * 0.55); // up to 0.95 opacity for the nearest clone
-
-        for (let i = 0; i < this.numClones; i++) {
-            const clone = this.trailVideos[i];
-
-            if (i < activeClones) {
-                // Slower decay so the trail stays thick for longer.
-                // At 12 clones, i=11 means 11 * 0.07 = 0.77 drop (still ~20% visible at the very end)
-                const decay = 1 - (i * 0.07);
-                const finalOpacity = Math.max(0, baseOpacity * decay);
-                clone.style.opacity = finalOpacity.toString();
-            } else {
-                clone.style.opacity = '0';
-            }
-        }
-    }
-
-    _syncTrailVideo(forceSnap = false) {
-        if (this.video.readyState < 2) return;
-
-        const s = this._trailStrength;
-        // 12 clones: max gap is slightly smaller to keep them tightly linked
-        // gap range: 0.01s to 0.035s per clone (total trail length up to ~0.4s)
-        const gap = 0.01 + (s * 0.025);
-        const isPaused = this.video.paused;
-
-        for (let i = 0; i < this.numClones; i++) {
-            const clone = this.trailVideos[i];
-            if (clone.style.opacity === '0' || clone.readyState < 2) continue;
-
-            const targetDelay = gap * (i + 1);
-
-            // Startup phase fix:
-            // If the main video hasn't reached the delay time for this clone, hold it at 0.
-            if (this.video.currentTime <= targetDelay) {
-                if (!clone.paused) clone.pause();
-                if (clone.currentTime > 0.05) clone.currentTime = 0;
-                continue; // Wait until the main video is far enough ahead
-            }
-
-            const targetTime = this.video.currentTime - targetDelay;
-
-            const drift = Math.abs(clone.currentTime - targetTime);
-
-            if (forceSnap || drift > 0.4 || (isPaused && drift > 0.05)) {
-                clone.currentTime = targetTime;
-            } else if (!isPaused) {
-                // Soft sync via playback rate (catch up or slow down slightly)
-                // This is much smoother than seeking
-                if (drift > 0.05) {
-                    if (clone.currentTime < targetTime) {
-                        clone.playbackRate = this.video.playbackRate * 1.05; // speed up
-                    } else {
-                        clone.playbackRate = this.video.playbackRate * 0.95; // slow down
-                    }
-                } else {
-                    clone.playbackRate = this.video.playbackRate;
-                }
-            }
-
-            // Ensure they are playing if the main video is playing
-            if (!isPaused && clone.paused) {
-                clone.play().catch(() => { });
-            }
-        }
-    }
-
-    _startSyncLoop() {
-        if (this._trailSyncInterval) return;
-        this._trailSyncInterval = setInterval(() => this._syncTrailVideo(), 100);
-    }
-
-    _stopSyncLoop() {
-        if (this._trailSyncInterval) {
-            clearInterval(this._trailSyncInterval);
-            this._trailSyncInterval = null;
-        }
     }
 
     // ── Events ────────────────────────────────────────────────────────
@@ -441,22 +274,15 @@ export default class Player {
         const progressFill = this.controls.querySelector('.progress-fill');
         const progressBuffered = this.controls.querySelector('.progress-buffered');
         const timeDisplay = this.controls.querySelector('.time-display');
-        const trailSlider = this.controls.querySelector('.trail-slider');
-        const trailLabel = this.controls.querySelector('.trail-label');
-
-        trailSlider.value = this._trailStrength;
-        trailLabel.textContent = `${Math.round(this._trailStrength * 100)}%`;
 
         // ── Play / Pause ──────────────────────────────────────────────
         const togglePlay = () => {
             if (this.video.paused) {
                 this.video.play();
-                this.trailVideos.forEach(v => v.play().catch(() => { }));
                 playBtn.textContent = '⏸';
                 this.isPlaying = true;
             } else {
                 this.video.pause();
-                this.trailVideos.forEach(v => v.pause());
                 playBtn.textContent = '▶';
                 this.isPlaying = false;
             }
