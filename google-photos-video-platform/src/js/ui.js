@@ -201,6 +201,51 @@ const UI = {
                 uploadInput.dispatchEvent(new Event('change'));
             }
         });
+
+        // ── Background URL Refresher (Prevents 60min Google Photos Expiration) ──
+        setInterval(async () => {
+            if (!Auth.isAuthenticated()) return;
+            const lastFetch = Store.get('lastFetchTime') || 0;
+            // Refresh if older than 45 minutes (2700000 ms)
+            if (Date.now() - lastFetch > 2700000) {
+                console.log('[App] Background URL refresh triggered (URLs expire after 60 mins)');
+                try {
+                    // Refresh Images
+                    await Gallery.fetchAllImages();
+
+                    // Refresh Videos
+                    let nextPageToken = null;
+                    let allVideos = [];
+                    do {
+                        const data = await API.searchVideos(nextPageToken);
+                        if (data && data.mediaItems) {
+                            const pageVideos = data.mediaItems.filter(item => item.mediaMetadata && item.mediaMetadata.video);
+                            allVideos = allVideos.concat(pageVideos);
+                        }
+                        nextPageToken = data ? data.nextPageToken : null;
+                    } while (nextPageToken);
+
+                    if (allVideos.length > 0) {
+                        Store.set('videos', allVideos);
+                        Store.set('lastFetchTime', Date.now());
+                        // Silent update to active playes without rerendering DOM
+                        const currentVids = Store.get('videos');
+                        document.querySelectorAll('.video-card-feed').forEach(card => {
+                            if (card._player && card.dataset.id) {
+                                const fresh = currentVids.find(v => v.id === card.dataset.id);
+                                if (fresh) {
+                                    card._player.videoUrl = fresh.baseUrl;
+                                    card._player.posterUrl = fresh.baseUrl;
+                                    // Player will auto-recover on next play OR active player will keep playing until buffer ends.
+                                }
+                            }
+                        });
+                    }
+                } catch (e) {
+                    console.error('[App] Background refresh failed:', e);
+                }
+            }
+        }, 300000); // Check every 5 minutes
     },
 
     handleRoute: async (route) => {
@@ -289,6 +334,7 @@ const UI = {
                 videos = allVideos;
                 Store.set('videos', videos);
                 Store.set('nextPageToken', null); // All loaded
+                Store.set('lastFetchTime', Date.now());
             }
 
             // Filter out videos the user has deleted

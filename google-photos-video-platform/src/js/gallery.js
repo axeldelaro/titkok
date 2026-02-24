@@ -1,5 +1,6 @@
 import API from './api.js';
 import Store from './store.js';
+import Cache from './cache.js';
 
 const Gallery = {
     _images: [],
@@ -27,6 +28,11 @@ const Gallery = {
                 const items = (data && data.mediaItems) || [];
                 allImages = [...allImages, ...items];
                 pageToken = data?.nextPageToken || null;
+
+                // Preload fetched images immediately into memory cache
+                if (items.length > 0) {
+                    Cache.preloadImageURLs(items.map(item => Gallery.getImageURL(item, 1080)));
+                }
 
                 // Update store progressively so UI can show images as they load
                 Gallery._images = allImages;

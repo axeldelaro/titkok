@@ -63,6 +63,30 @@ export default class Player {
         ].join(';');
         this.container.appendChild(this.video);
 
+        // Clones for the trail effect
+        for (let i = 0; i < this.numClones; i++) {
+            const clone = document.createElement('video');
+            clone.muted = true;
+            clone.playsInline = true;
+            clone.controls = false;
+            clone.loop = true;
+            clone.setAttribute('playsinline', '');
+            clone.setAttribute('webkit-playsinline', '');
+            clone.setAttribute('muted', '');
+            clone.style.cssText = [
+                'position:absolute', 'inset:0',
+                'width:100%', 'height:100%',
+                'object-fit:contain',
+                'z-index:1',
+                'pointer-events:none',
+                'mix-blend-mode: screen',
+                `opacity: ${0.8 - (i * 0.06)}`,
+                'transition: transform 0.2s',
+            ].join(';');
+            this.container.appendChild(clone);
+            this.trailVideos.push(clone);
+        }
+
         // Loading overlay
         this.loadingOverlay = document.createElement('div');
         this.loadingOverlay.className = 'player-loading-overlay player-overlay-hidden';
@@ -255,6 +279,42 @@ export default class Player {
     deactivate() {
         this._saveProgress();
         this.video.pause();
+    }
+
+    // ── Trail Sync ────────────────────────────────────────────────────
+    _syncTrailVideo() {
+        if (this._syncSyncRaf) cancelAnimationFrame(this._syncSyncRaf);
+
+        this.trailVideos.forEach(v => {
+            if (v.src !== this.video.src) {
+                v.src = this.video.src;
+                v.preload = 'auto';
+            }
+        });
+
+        const loop = () => {
+            if (this.isPlaying) {
+                const ct = this.video.currentTime;
+                this.trailVideos.forEach((v, i) => {
+                    const targetTime = Math.max(0, ct - ((i + 1) * 0.08));
+                    // Allow small drift to prevent audio/video stuttering
+                    if (Math.abs(v.currentTime - targetTime) > 0.25) {
+                        v.currentTime = targetTime;
+                    }
+                    if (v.paused) v.play().catch(() => { });
+                });
+            } else {
+                this.trailVideos.forEach(v => {
+                    if (!v.paused) v.pause();
+                });
+            }
+            this._syncSyncRaf = requestAnimationFrame(loop);
+        };
+        this._syncSyncRaf = requestAnimationFrame(loop);
+    }
+
+    _stopSyncLoop() {
+        if (this._syncSyncRaf) cancelAnimationFrame(this._syncSyncRaf);
     }
 
     // ── Events ────────────────────────────────────────────────────────

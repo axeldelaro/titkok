@@ -451,9 +451,15 @@ function spawnPopup() {
     popup.className = 'hypno-popup hypno-fleet';
 
     const img = document.createElement('img');
+    img.decoding = 'async';
+    img.loading = 'eager';
     img.src = Gallery.getImageURL(randImg, 400);
     img.draggable = false;
     img.style.pointerEvents = 'none';
+    img.onerror = () => {
+        if (popup.parentNode) popup.remove();
+        activePopups.delete(popup);
+    };
     popup.appendChild(img);
 
     const maxW = window.innerWidth;

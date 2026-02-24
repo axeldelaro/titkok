@@ -11,7 +11,8 @@ class Store extends EventTarget {
             playlists: [], // Loaded from local storage
             likes: [], // Loaded from local storage
             loading: false,
-            darkMode: true
+            darkMode: true,
+            lastFetchTime: 0 // Track Google Photos URL expiration
         };
     }
 
