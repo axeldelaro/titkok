@@ -520,6 +520,59 @@
     opacity: 1;
 }
 
+/* Playlist Modal */
+.playlist-modal {
+    display: flex;
+    flex-direction: column;
+}
+
+.playlist-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    max-height: 250px;
+    overflow-y: auto;
+    padding-right: 0.5rem;
+}
+
+.playlist-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+.playlist-list::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+}
+
+.playlist-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    background: var(--surface-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    transition: background 0.2s, border-color 0.2s;
+}
+
+.playlist-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+.playlist-item span {
+    font-weight: 500;
+    font-size: 0.95rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.playlist-item .add-to-btn {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.8rem;
+}
+
 /* History */
 .history-list {
     display: flex;

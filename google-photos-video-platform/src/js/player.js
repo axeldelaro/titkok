@@ -530,9 +530,21 @@ export default class Player {
         if (this._keyHandler) document.removeEventListener('keydown', this._keyHandler);
         clearTimeout(this.hideControlsTimer);
         clearTimeout(this._loadingTimeout);
-        if (this.video) { this.video.pause(); this.video.removeAttribute('src'); this.video.load(); }
+
+        if (this.video) {
+            this.video.pause();
+            this.video.removeAttribute('src');
+            this.video.load();
+        }
+
         this.trailVideos.forEach(v => {
-            v.pause(); v.removeAttribute('src'); v.load();
+            v.pause();
+            v.removeAttribute('src');
+            v.load();
         });
+
+        if (this.container) {
+            this.container.innerHTML = '';
+        }
     }
 }
