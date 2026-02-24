@@ -211,7 +211,7 @@ export default class Player {
     // ── Retry ─────────────────────────────────────────────────────────
     async _retryPlayback() {
         this.showLoading(); this.hideError();
-        const src = this.isBlob ? this.videoUrl : `${this.videoUrl}=dv`;
+        const src = this.isBlob ? this.videoUrl : this._getAdaptiveVideoUrl(this.videoUrl);
 
         if (this.mediaItemId) {
             try {
@@ -219,7 +219,7 @@ export default class Player {
                 const fresh = await API.getVideo(this.mediaItemId);
                 if (fresh?.baseUrl) {
                     this.videoUrl = fresh.baseUrl;
-                    const fsrc = `${fresh.baseUrl}=dv`;
+                    const fsrc = this._getAdaptiveVideoUrl(fresh.baseUrl);
                     this.video.src = fsrc;
 
                     this.video.load();
@@ -239,11 +239,21 @@ export default class Player {
     }
 
     // ── Playback lifecycle ─────────────────────────────────────────────
+    _getAdaptiveVideoUrl(baseUrl) {
+        if (!baseUrl) return '';
+        const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+        // 480p for slow/cellular, 720p for fast
+        if (conn && (conn.saveData || ['slow-2g', '2g', '3g'].includes(conn.effectiveType))) {
+            return `${baseUrl}=w854-h480-dv`;
+        }
+        return `${baseUrl}=w1280-h720-dv`;
+    }
+
     startPlayback() {
         this._started = true;
         this.showLoading();
 
-        const src = this.isBlob ? this.videoUrl : `${this.videoUrl}=dv`;
+        const src = this.isBlob ? this.videoUrl : this._getAdaptiveVideoUrl(this.videoUrl);
         this.video.src = src;
 
         this.video.preload = 'auto';
@@ -268,7 +278,7 @@ export default class Player {
         if (conn?.saveData || ['slow-2g', '2g'].includes(conn?.effectiveType)) return;
         this._preloaded = true;
 
-        const src = this.isBlob ? this.videoUrl : `${this.videoUrl}=dv`;
+        const src = this.isBlob ? this.videoUrl : this._getAdaptiveVideoUrl(this.videoUrl);
         this.video.src = src;
 
         this.video.preload = 'auto';
