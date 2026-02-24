@@ -241,12 +241,8 @@ export default class Player {
     // ── Playback lifecycle ─────────────────────────────────────────────
     _getAdaptiveVideoUrl(baseUrl) {
         if (!baseUrl) return '';
-        const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
-        // 480p for slow/cellular, 720p for fast
-        if (conn && (conn.saveData || ['slow-2g', '2g', '3g'].includes(conn.effectiveType))) {
-            return `${baseUrl}=w854-h480-dv`;
-        }
-        return `${baseUrl}=w1280-h720-dv`;
+        // Fixed 480p resolution to guarantee maximum fluidity
+        return `${baseUrl}=w854-h480-dv`;
     }
 
     startPlayback() {

@@ -87,10 +87,7 @@ const Cache = {
     _preloadVideo(item) {
         if (!item.baseUrl) return;
 
-        let url = `${item.baseUrl}=w1280-h720-dv`; // Default to 720p cap
-        if (_isSlowConnection() || _isMediumConnection()) {
-            url = `${item.baseUrl}=w854-h480-dv`; // 480p for 3g/2g
-        }
+        const url = `${item.baseUrl}=w854-h480-dv`; // Fixed 480p cap
 
         if (_vidCache.has(url)) return;
 

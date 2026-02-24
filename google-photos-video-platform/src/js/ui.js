@@ -17,6 +17,7 @@ import VisualEditor from './visual-editor.js';
 import FaceEditor from './face-editor.js';
 import Cache from './cache.js';
 import MediaStats from './mediaStats.js';
+import Playlist from './playlist.js';
 import { ALL_NAV_ITEMS, getVisibleItems, setVisibleItems } from '../components/sidebar.js';
 import { compressAll, buildQualitySelector, getQuality, QUALITY_PRESETS } from './compressor.js';
 
@@ -169,6 +170,7 @@ const UI = {
         Likes.init();
         Gallery.init();
         History.init();
+        Playlist.init();
 
         // #32 Scroll-to-Top FAB
         const scrollBtn = document.createElement('button');
@@ -282,6 +284,14 @@ const UI = {
                 break;
             case 'mix':
                 UI.renderMix(content);
+                break;
+            case 'playlists':
+                UI.renderPlaylistsOverview(content);
+                break;
+            case 'playlist':
+                const pid = route.params.get('id');
+                if (pid) UI.renderPlaylistFeed(content, pid);
+                else Router.navigate('/playlists');
                 break;
             case 'gallery':
                 UI.renderGallery(content);
@@ -768,6 +778,164 @@ const UI = {
         grid.className = 'video-grid';
         likes.forEach(video => {
             grid.appendChild(VideoCard(video));
+        });
+        container.appendChild(grid);
+    },
+
+    // ── PLAYLISTS (Folders) ──────────────────────────────────────────
+    showAddToPlaylistModal: (video) => {
+        const playlists = Store.get('playlists') || [];
+
+        const content = `
+            <div class="playlist-modal">
+                <input type="text" id="new-playlist-name" placeholder="Create new folder..." class="input" style="width:100%; margin-bottom: 1rem;">
+                <button id="create-playlist-btn" class="btn-primary" style="width:100%; margin-bottom: 2rem;">+ Create Folder</button>
+                
+                <div class="playlist-list" style="max-height: 200px; overflow-y: auto;">
+                    ${playlists.length === 0 ? '<p class="text-secondary text-center">No folders yet.</p>' : ''}
+                    ${playlists.map(p => `
+                        <div class="playlist-item" style="display:flex; justify-content:space-between; align-items:center; padding: 10px; background: var(--surface-color); margin-bottom: 8px; border-radius: 8px;">
+                            <span>📁 ${p.name}</span>
+                            <button class="btn-primary add-to-btn" data-id="${p.id}" ${p.videos.some(v => v.id === video.id) ? 'disabled style="opacity:0.5"' : ''}>
+                                ${p.videos.some(v => v.id === video.id) ? 'Added' : 'Add'}
+                            </button>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+
+        const modal = Modal('Save to Folder', content);
+        document.body.appendChild(modal);
+
+        modal.querySelector('#create-playlist-btn').onclick = () => {
+            const name = modal.querySelector('#new-playlist-name').value.trim();
+            if (name) {
+                const p = Playlist.create(name);
+                Playlist.addVideo(p.id, video);
+                Toast.show(`Created folder "${name}" and added video.`, 'success');
+                modal.classList.remove('open');
+                setTimeout(() => modal.remove(), 300);
+            }
+        };
+
+        modal.querySelectorAll('.add-to-btn').forEach(btn => {
+            btn.onclick = () => {
+                const id = btn.dataset.id;
+                if (Playlist.addVideo(id, video)) {
+                    Toast.show('Added to folder!', 'success');
+                    btn.textContent = 'Added';
+                    btn.disabled = true;
+                    btn.style.opacity = '0.5';
+                }
+            };
+        });
+    },
+
+    renderPlaylistsOverview: (container) => {
+        const playlists = Store.get('playlists') || [];
+
+        container.innerHTML = `
+            <div class="section-header">
+                <h2>📁 My Folders</h2>
+                <span class="text-secondary">${playlists.length} folder${playlists.length !== 1 ? 's' : ''}</span>
+            </div>
+        `;
+
+        if (playlists.length === 0) {
+            container.innerHTML += `
+                <div class="empty-state">
+                    <span class="empty-state-icon">📁</span>
+                    <h2>No Folders</h2>
+                    <p class="text-secondary">Create folders to organize your favorite videos.</p>
+                </div>`;
+            return;
+        }
+
+        const grid = document.createElement('div');
+        grid.className = 'video-grid';
+        grid.style.display = 'grid';
+        grid.style.gridTemplateColumns = 'repeat(auto-fill, minmax(200px, 1fr))';
+        grid.style.gap = '1rem';
+
+        playlists.forEach(p => {
+            const el = document.createElement('div');
+            el.className = 'playlist-card';
+            el.style.background = 'var(--surface-color)';
+            el.style.padding = '1.5rem';
+            el.style.borderRadius = 'var(--radius-lg)';
+            el.style.cursor = 'pointer';
+            el.style.transition = 'transform 0.2s';
+            el.innerHTML = `
+                <div style="font-size: 3rem; margin-bottom: 1rem; text-align: center;">📁</div>
+                <h3 style="text-align: center; margin-bottom: 0.5rem;">${p.name}</h3>
+                <p class="text-secondary" style="text-align: center;">${p.videos.length} item${p.videos.length !== 1 ? 's' : ''}</p>
+            `;
+            el.onmouseenter = () => el.style.transform = 'translateY(-5px)';
+            el.onmouseleave = () => el.style.transform = 'translateY(0)';
+            el.onclick = () => Router.navigate(`/playlist?id=${p.id}`);
+            grid.appendChild(el);
+        });
+        container.appendChild(grid);
+    },
+
+    renderPlaylistFeed: (container, playlistId) => {
+        const playlist = Playlist.get(playlistId);
+        if (!playlist) {
+            Router.navigate('/playlists');
+            return;
+        }
+
+        container.innerHTML = `
+            <div class="section-header" style="display:flex; justify-content:space-between; align-items:center;">
+                <div style="display:flex; align-items:center; gap: 1rem;">
+                    <button class="btn-icon" onclick="window.history.back()" style="font-size:1.5rem;">←</button>
+                    <h2>📁 ${playlist.name}</h2>
+                </div>
+                <button id="delete-folder-btn" class="btn-icon" style="color:var(--error-color);" title="Delete Folder">🗑️ Delete</button>
+            </div>
+        `;
+
+        container.querySelector('#delete-folder-btn').onclick = () => {
+            if (confirm(`Are you sure you want to delete the folder "${playlist.name}"?`)) {
+                Playlist.delete(playlistId);
+                Router.navigate('/playlists');
+                Toast.show('Folder deleted.');
+            }
+        };
+
+        if (playlist.videos.length === 0) {
+            container.innerHTML += `
+                <div class="empty-state">
+                    <span class="empty-state-icon">🗑️</span>
+                    <h2>Folder Empty</h2>
+                    <p class="text-secondary">Add videos to this folder for them to appear here.</p>
+                </div>`;
+            return;
+        }
+
+        // Just use the nice grid from Likes/History to show the videos in the folder
+        const grid = document.createElement('div');
+        grid.className = 'video-grid';
+        playlist.videos.forEach(video => {
+            const card = VideoCard(video);
+            // Append a quick remove button
+            const removeBtn = document.createElement('button');
+            removeBtn.className = 'btn-icon';
+            removeBtn.innerHTML = '❌';
+            removeBtn.style.position = 'absolute';
+            removeBtn.style.top = '10px';
+            removeBtn.style.right = '10px';
+            removeBtn.style.zIndex = '10';
+            removeBtn.style.background = 'rgba(0,0,0,0.5)';
+            removeBtn.style.borderRadius = '50%';
+            removeBtn.onclick = (e) => {
+                e.stopPropagation();
+                Playlist.removeVideo(playlistId, video.id);
+                UI.renderPlaylistFeed(container, playlistId);
+            };
+            card.appendChild(removeBtn);
+            grid.appendChild(card);
         });
         container.appendChild(grid);
     },

@@ -7,6 +7,7 @@ export const ALL_NAV_ITEMS = [
     { key: 'home', icon: '🏠', label: 'Home', path: '#/' },
     { key: 'history', icon: '🕐', label: 'History', path: '#/history' },
     { key: 'likes', icon: '❤️', label: 'Liked Videos', path: '#/likes' },
+    { key: 'playlists', icon: '📁', label: 'Folders', path: '#/playlists' },
     { key: 'mix', icon: '🔀', label: 'Mix', path: '#/mix' },
     { key: 'gallery', icon: '🖼️', label: 'Gallery', path: '#/gallery' },
     { key: 'visual', icon: '🎨', label: 'Visual Editor', path: '#/visual-editor' },
@@ -54,15 +55,22 @@ export default function Sidebar() {
             </div>
         `;
 
-        // Intercept Visual Editor link
-        const veLink = aside.querySelector('a[href="#/visual-editor"]');
-        if (veLink) {
-            veLink.addEventListener('click', (e) => {
-                e.preventDefault();
-                VisualEditor.init();
-                VisualEditor.toggle();
-            });
-        }
+        // Intercept Visual Editor link and normal links
+        aside.querySelectorAll('.sidebar-link').forEach(link => {
+            const path = link.getAttribute('href');
+            if (path === '#/visual-editor') {
+                link.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    VisualEditor.init();
+                    VisualEditor.toggle();
+                });
+            } else {
+                link.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    Router.navigate(path);
+                });
+            }
+        });
     };
 
     render();

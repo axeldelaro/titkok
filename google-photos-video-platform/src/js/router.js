@@ -4,6 +4,8 @@ const routes = {
     '/video': 'video',
     '/mix': 'mix',
     '/likes': 'likes',
+    '/playlists': 'playlists',
+    '/playlist': 'playlist',
     '/gallery': 'gallery',
     '/profile': 'profile',
     '/search': 'search',
